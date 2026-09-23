@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>予定</title>
+<meta name="theme-color" content="#1a73e8">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+  :root { --bg: #f6f7f9; --text: #1f2328; --sub: #667085; --blue: #1a73e8; --card: #fff; --line: #e4e7ec; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #16181d; --text: #eceef2; --sub: #9aa3b2; --card: #1f2229; --line: #2e323b; }
+  }
+  :root[data-theme="dark"] { --bg: #16181d; --text: #eceef2; --sub: #9aa3b2; --card: #1f2229; --line: #2e323b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px;
+    background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif; }
+  main { width: 100%; max-width: 420px; text-align: center; }
+  img { width: 96px; height: 96px; border-radius: 22px; }
+  h1 { margin: 16px 0 4px; font-size: 22px; }
+  p { margin: 8px 0; color: var(--sub); line-height: 1.7; font-size: 14px; }
+  .btn { display: inline-block; margin-top: 16px; padding: 12px 24px; border-radius: 10px; background: var(--blue); color: #fff; text-decoration: none; font-weight: 700; }
+  .how { margin-top: 24px; padding: 16px; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  .how ol { margin: 8px 0 0; padding-left: 20px; line-height: 1.9; font-size: 14px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <img src="icon-192.png" alt="">
+  <h1>予定</h1>
+
+  <!-- ホーム画面のアイコンから開いたとき：すぐアプリへ移動する -->
+  <div id="launching" hidden>
+    <p>開いています…</p>
+    <p><a id="fallback" href="#">開かないときはこちら</a></p>
+  </div>
+
+  <!-- このページを直接開いたとき：ホーム画面への追加の案内 -->
+  <div id="setup" hidden>
+    <a id="open" class="btn" href="#">アプリを開く</a>
+    <div class="how">
+      <strong>ホーム画面に追加する方法</strong>
+      <ol>
+        <li>授業アカウントでログインしているブラウザ（Edge）でこのページを開く</li>
+        <li>ブラウザのメニュー（≡ または ︙）を開く</li>
+        <li>「電話に追加」「アプリをインストール」または「ホーム画面に追加」を選ぶ</li>
+      </ol>
+    </div>
+  </div>
+</main>
+<script>
+  // 移動先：スケジュール管理アプリ（Apps Script）。開けるのは授業アカウントだけ
+  const APP_URL = 'https://script.google.com/a/macros/yswisecompany.com/s/AKfycbzi4dXPE4F-PtbiRfgSOSdpYft6rpVaKZWJJZNNcZPrejIOE3ZybbmsLnDke10deqQE/exec';
+
+  document.getElementById('fallback').href = APP_URL;
+  document.getElementById('open').href = APP_URL;
+
+  // 2回目以降はこのページ自体を端末に保存しておき、一瞬で開けるようにする
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+  // ホーム画面のアイコンから開いたとき（?launch=1 付き）だけ、すぐアプリへ移動する
+  if (new URLSearchParams(location.search).has('launch')) {
+    document.getElementById('launching').hidden = false;
+    location.replace(APP_URL);
+  } else {
+    document.getElementById('setup').hidden = false;
+  }
+</script>
+</body>
+</html>
