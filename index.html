@@ -37,13 +37,17 @@
   button.icon { padding: 6px 12px; font-size: 18px; line-height: 1; }
   .tabs button { padding: 10px 10px; }
 
-  /* 予定タブ */
-  .calbar { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
-  .calbar input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
-  .calday.today { color: var(--blue); }
-  .calday.picked { color: var(--text); }
-  .calday.picked::after { content: "　← 選んだ日"; color: var(--blue); font-weight: 400; }
-  .task.empty { color: var(--sub); font-size: 13px; }
+  /* タスク一覧：今日の見出しを目立たせる・時刻 */
+  .sec.today { color: var(--blue); }
+  .sec.empty { font-weight: 400; margin: 10px 0 2px; opacity: .7; } /* タスクのない日は控えめに */
+  .task .meta .time { color: var(--text); font-weight: 600; }
+
+  /* 日付で確認 */
+  .daycheck { display: flex; gap: 8px; align-items: center; margin: 0 0 4px; font-size: 13px; color: var(--sub); }
+  .daycheck input { flex: 1; min-width: 0; max-width: 220px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .daycheck button { padding: 6px 12px; font-size: 13px; }
+  .task.occurrence { background: #f9fafb; }
+  .task.occurrence .mark { flex: none; width: 24px; text-align: center; color: var(--sub); font-size: 16px; margin-top: 1px; }
 
   /* 編集画面：期限の日の予定 */
   .dayinfo { margin-top: 8px; font-size: 13px; line-height: 1.7; color: var(--text); }
@@ -78,12 +82,7 @@
   .chips button { flex: none; padding: 6px 12px; border-radius: 99px; font-size: 13px; }
   .chips button.on { background: var(--text); border-color: var(--text); color: #fff; }
 
-  /* タスク：予定と一覧 */
-  .events { margin-bottom: 14px; padding: 10px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
-  /* カレンダーの予定（今日・明日の欄にタスクと一緒に並ぶ。チェックはない） */
-  .task.event { background: #f9fafb; }
-  .task.event .evtime { flex: none; width: 24px; margin-top: 1px; text-align: center; font-size: 16px; }
-  .task.event .body { cursor: default; }
+  /* タスク：一覧 */
   .sec { margin: 18px 0 6px; font-size: 13px; font-weight: 700; color: var(--sub); }
   .sec.overdue { color: var(--red); }
   .tasks { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
@@ -134,12 +133,10 @@
 <header>
   <nav class="tabs">
     <button type="button" data-tab="tasks">タスク</button>
-    <button type="button" data-tab="cal">予定</button>
     <button type="button" data-tab="remind">リマインド<span id="remindCount" class="count" hidden></span></button>
     <button type="button" data-tab="health">健康</button>
   </nav>
   <span id="status" class="status"></span>
-  <!-- タブが4つになったので、読み直すは記号だけにして場所を空ける -->
   <button id="reload" class="icon" type="button" title="カレンダーとタスクを読み直す" aria-label="読み直す">↻</button>
 </header>
 
@@ -152,22 +149,18 @@
       <button id="qaDetail" type="button" title="期限・繰り返しなどを指定して追加">詳しく</button>
     </form>
     <div id="chips" class="chips"></div>
+    <!-- 日付で確認：その日に期限があるタスクと、繰り返しでその日に当たる回を出す（js_cal.html） -->
+    <div class="daycheck">
+      <label for="dayPick">日付で確認</label>
+      <input id="dayPick" type="date">
+      <button id="dayClear" type="button" hidden>閉じる</button>
+    </div>
+    <div id="dayResult"></div>
     <div id="taskList"></div>
     <details id="doneBox" hidden>
       <summary id="doneSummary"></summary>
       <div id="doneList"></div>
     </details>
-  </section>
-
-  <!-- 予定（1週間の一覧。日付を選ぶと、その日から7日分） -->
-  <section id="tab-cal" hidden>
-    <div class="calbar">
-      <button id="calPrev" type="button" aria-label="前の週">◀</button>
-      <input id="calDate" type="date" aria-label="日付を選ぶ">
-      <button id="calToday" type="button">今日</button>
-      <button id="calNext" type="button" aria-label="次の週">▶</button>
-    </div>
-    <div id="calList"></div>
   </section>
 
   <!-- リマインド -->
@@ -188,7 +181,7 @@
   </section>
 
   <!-- 画面を直したら数字を上げる。公開中の画面が最新かどうかの目印 -->
-  <p class="range" style="margin-top:24px">画面の版：v16（2026-09-27）<span id="perf"></span></p>
+  <p class="range" style="margin-top:24px">画面の版：v17（2026-09-27）<span id="perf"></span></p>
 </main>
 
 <!-- タスクの編集画面 -->
@@ -197,7 +190,10 @@
     <h2 id="edHeading" style="margin:0 0 10px;font-size:16px">タスクを編集</h2>
     <input id="edTitle" class="big" placeholder="タスク名" required>
     <label class="field">プロジェクト<select id="edProject"></select></label>
-    <label class="field">期限<input id="edDue" type="date"></label>
+    <div class="row">
+      <label class="field">期限<input id="edDue" type="date"></label>
+      <label class="field">時刻（あれば）<input id="edTime" type="time"></label>
+    </div>
     <div class="quickdates">
       <button type="button" data-d="0">今日</button>
       <button type="button" data-d="1">明日</button>
@@ -369,7 +365,7 @@
   window.addEventListener('resize', fitAll);
 
   // ---- タブ ----
-  const TABS = ['tasks', 'cal', 'remind', 'health'];
+  const TABS = ['tasks', 'remind', 'health'];
 
   function showTab(name) {
     TABS.forEach(t => {
@@ -520,6 +516,7 @@
   const MINUTE_CHOICES = [0, 15, 30, 45, 60, 90, 120, 180, 240];
   const WEEK = '日月火水木金土';
   const NEW_PROJECT = '__new__';
+  const WEEK_DAYS = 7; // 今日から何日分を1日ずつ並べるか
   const DAY = 86400000;
   let tmpSeq = 0;
 
@@ -615,11 +612,22 @@
     if (T.filter === 'star') return t.star;
     return t.project === T.filter;
   }
-  /** ★が先、次に期限の早い順、最後に作った順 */
+  /** 並べ方：期限の早い順 → 同じ日なら時刻のあるものを時刻順に先に → ★が先 → 作った順 */
   function byPriority(a, b) {
-    return (Number(b.star) - Number(a.star)) ||
-      (a.due || '9999-12-31').localeCompare(b.due || '9999-12-31') ||
+    return (a.due || '9999-12-31').localeCompare(b.due || '9999-12-31') ||
+      (a.time ? 0 : 1) - (b.time ? 0 : 1) ||
+      (a.time || '').localeCompare(b.time || '') ||
+      (Number(b.star) - Number(a.star)) ||
       a.createdAt.localeCompare(b.createdAt);
+  }
+  /** 「09:00」→「9:00」、所要時間があれば「9:00〜10:30」 */
+  function timeLabel(t) {
+    if (!t.time) return '';
+    const start = t.time.replace(/^0/, '');
+    if (!t.minutes) return start;
+    const p = t.time.split(':').map(Number);
+    const end = p[0] * 60 + p[1] + t.minutes;
+    return start + '〜' + Math.floor(end / 60) % 24 + ':' + String(end % 60).padStart(2, '0');
   }
   function findTask(id) {
     return T.tasks.find(x => x.id === id);
@@ -638,8 +646,6 @@
     const unsaved = T.tasks.filter(t => t.pending); // 追加したばかりで保存中のものは消さずに残す
     Object.assign(T, d, { filter: filter });
     T.tasks = T.tasks.concat(unsaved.filter(u => !findTask(u.id)));
-    // 予定タブ用に、サーバーが送ってくれた日数分の予定を覚える（js_cal.html）。古い保存分は2日分しかない
-    rememberEvents(T.events || [], T.today, d.eventDays || 2);
     renderTasks();
   }
 
@@ -649,32 +655,29 @@
     renderChips();
 
     const open = T.tasks.filter(t => !t.done && matchesFilter(t));
-    const tomorrow = addDaysYmd(T.today, 1);
-    // 今日・明日の欄には、カレンダーの予定（授業など）もタスクと一緒に並べる。プロジェクトで絞り込み中は出さない
-    const eventsOn = day => (T.filter === 'all' ? T.events.filter(e => e.date === day) : []);
-    const groups = [
-      { title: '期限切れ', cls: 'overdue', test: t => t.due && t.due < T.today },
-      { title: '今日 ' + (T.today ? fmtDate(T.today) : ''), events: eventsOn(T.today), test: t => t.due === T.today },
-      { title: '明日 ' + (T.today ? fmtDate(tomorrow) : ''), events: eventsOn(tomorrow), test: t => t.due === tomorrow },
-      { title: '7日以内', test: t => t.due && diffDays(t.due, T.today) >= 2 && diffDays(t.due, T.today) <= 7 },
-      { title: 'それ以降', test: t => t.due && diffDays(t.due, T.today) > 7 },
-      { title: '期限なし', test: t => !t.due }
-    ];
+    // 期限切れ → 今日から1週間は1日ずつ → それ以降 → 期限なし
+    const groups = [{ title: '期限切れ', cls: 'overdue', test: t => t.due && t.due < T.today }];
+    for (let i = 0; i < WEEK_DAYS; i++) {
+      const day = addDaysYmd(T.today, i);
+      groups.push({ title: (i === 0 ? '今日 ' : i === 1 ? '明日 ' : '') + fmtDate(day), cls: i === 0 ? 'today' : '', day: true, test: t => t.due === day });
+    }
+    groups.push({ title: 'それ以降', test: t => t.due && diffDays(t.due, T.today) >= WEEK_DAYS });
+    groups.push({ title: '期限なし', test: t => !t.due });
+
     const box = $('taskList');
     box.innerHTML = '';
     let shown = 0;
     groups.forEach(g => {
       const items = open.filter(g.test).sort(byPriority);
-      const evs = g.events || [];
-      if (!items.length && !evs.length) return;
-      shown++;
+      // 1週間の日は、すべて表示しているときは空いている日も「なし」と出す（空き日が分かるように）
+      const showEmptyDay = g.day && T.filter === 'all';
+      if (!items.length && !showEmptyDay) return;
+      if (items.length) shown++;
       const h = document.createElement('div');
-      h.className = 'sec' + (g.cls ? ' ' + g.cls : '');
-      h.textContent = g.title + (items.length ? '　' + items.length + '件' : '');
+      h.className = 'sec' + (g.cls ? ' ' + g.cls : '') + (items.length ? '' : ' empty');
+      h.textContent = g.title + '　' + (items.length ? items.length + '件' : 'なし');
       box.appendChild(h);
-      const list = taskList(items);
-      evs.slice().reverse().forEach(e => list.prepend(eventEl(e))); // 予定は時刻順に、タスクより上に
-      box.appendChild(list);
+      if (items.length) box.appendChild(taskList(items));
     });
     if (!shown) box.appendChild(note(T.filter === 'all' ? '未完了のタスクはありません。' : 'この絞り込みに当てはまるタスクはありません。'));
 
@@ -686,7 +689,7 @@
     if (done.length) $('doneList').appendChild(taskList(done));
     $('doneBox').hidden = !done.length;
 
-    renderCal(); // 予定タブにも、期限のタスクの変化を反映する（js_cal.html）
+    renderDayCheck(); // 「日付で確認」を開いていれば、中身も最新に（js_cal.html）
   }
 
   function taskList(items) {
@@ -731,16 +734,6 @@
     $('qaTitle').placeholder = 'タスクを追加' + (isProjectFilter() ? '（' + T.filter + '）' : '') + '…';
   }
 
-  /** カレンダーの予定の行（タスクと同じ見た目で、チェックの代わりにカレンダーの印） */
-  function eventEl(e) {
-    const el = document.createElement('div');
-    el.className = 'task event';
-    el.innerHTML = '<span class="evtime" aria-hidden="true">📅</span><div class="body"><div class="ttl"></div><div class="meta"></div></div>';
-    el.querySelector('.ttl').textContent = e.title;
-    el.querySelector('.meta').textContent = e.time + '・カレンダーの予定';
-    return el;
-  }
-
   function taskEl(t) {
     const el = document.createElement('div');
     el.className = 'task' + (t.done ? ' done' : '') + (t.pending ? ' pending' : '');
@@ -763,8 +756,9 @@
     dot.style.background = projectColor(t.project);
     add(t.project).prepend(dot);
     if (t.due) add(dueLabel(t.due), 'due' + (!t.done && t.due < T.today ? ' over' : ''));
+    if (t.time) add('🕘 ' + timeLabel(t), 'time');
     if (t.repeat) add('↻ ' + t.repeat);
-    if (t.minutes) add('⏱ ' + fmtMinutes(t.minutes));
+    if (t.minutes && !t.time) add('⏱ ' + fmtMinutes(t.minutes)); // 時刻があれば「9:00〜10:30」に含まれる
     if (t.memo) add('📝 メモあり');
 
     const star = el.querySelector('.star');
@@ -781,10 +775,10 @@
 
   function addTask(input) {
     const tmp = Object.assign({
-      id: 'tmp-' + (++tmpSeq), project: 'Inbox', due: '', repeat: '', star: false, minutes: 0, memo: '',
+      id: 'tmp-' + (++tmpSeq), project: 'Inbox', due: '', time: '', repeat: '', star: false, minutes: 0, memo: '',
       done: false, doneAt: '', createdAt: nowLocal(), pending: true // pending：保存が終わるまで操作できない
     }, input);
-    if (tmp.repeat && !tmp.due) tmp.due = T.today;
+    if ((tmp.repeat || tmp.time) && !tmp.due) tmp.due = T.today; // サーバーと同じ決まり
     T.tasks.push(tmp);
     renderTasks();
     sync(call('saveTask', input).then(t => { removeTask(tmp.id); replaceTask(t); renderTasks(); saveState(); }))
@@ -793,7 +787,7 @@
 
   function updateTask(orig, input) {
     const merged = Object.assign({}, orig, input);
-    if (merged.repeat && !merged.due) merged.due = T.today;
+    if ((merged.repeat || merged.time) && !merged.due) merged.due = T.today;
     replaceTask(merged);
     renderTasks();
     sync(enqueue(orig.id, () => call('saveTask', merged)).then(t => { replaceTask(t); renderTasks(); saveState(); }))
@@ -911,6 +905,7 @@
     $('edTitle').value = t ? t.title : $('qaTitle').value.trim();
     fillProjects(t ? t.project : (isProjectFilter() ? T.filter : 'Inbox'));
     $('edDue').value = t ? t.due : '';
+    $('edTime').value = t && t.time ? t.time : '';
     fillSelect($('edRepeat'), [['', 'なし']].concat(T.repeatRules.map(r => [r, r])), t ? t.repeat : '');
     const mins = MINUTE_CHOICES.slice();
     if (t && t.minutes && mins.indexOf(t.minutes) === -1) mins.push(t.minutes);
@@ -954,6 +949,7 @@
       title: title,
       project: project === NEW_PROJECT ? 'Inbox' : project,
       due: $('edDue').value,
+      time: $('edTime').value, // 「19:00」の形（空なら時刻なし）
       repeat: $('edRepeat').value,
       minutes: Number($('edMinutes').value),
       star: $('edStar').checked,
@@ -1001,113 +997,78 @@
 </script>
 
 <script>
-  // ---- 予定（1週間の一覧・その日の空きの確認）----
-  // 予定は日付ごとに覚えておき（EV）、まだ取り寄せていない週だけサーバーに頼む
-  const EV = {};          // '2026-10-01' → [{ time, title }]
-  const EV_LOADED = {};   // 取り寄せ済みの日
-  const CAL = { start: '' };
-  const CAL_DAYS = 7;
+  // ---- 日付でタスクを確かめる（「◯月◯日は空いている？」）----
+  // 予定もすべてタスクで持つので、その日に期限があるタスクと、繰り返しでその日に当たる回を並べる
 
-  /** アプリを開いたときに届いた予定（今日から8日分）を覚える */
-  function rememberEvents(events, fromYmd, days) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(fromYmd || '')) return; // 日付がまだ分からない（データが届く前）ときは何もしない
-    for (let i = 0; i < days; i++) {
-      const d = addDaysYmd(fromYmd, i);
-      EV[d] = [];
-      EV_LOADED[d] = true;
-    }
-    events.forEach(e => { if (EV_LOADED[e.date]) EV[e.date].push(e); });
+  /** タスクがその日に当たるか（繰り返しなら、期限＝次の回から数えて当たる日も含める。サーバーの occurrences_ と同じ決まり） */
+  function occursOn(t, ymd) {
+    if (!t.due) return false;
+    if (t.due === ymd) return true;
+    if (!t.repeat || ymd < t.due) return false;
+    const anchor = ymdToUtc(t.due);
+    const anchorDay = new Date(anchor).getUTCDate();
+    const target = ymdToUtc(ymd);
+    let d = anchor;
+    for (let i = 0; i < 5000 && d < target; i++) d = stepClient(d, t.repeat, anchorDay);
+    return d === target;
   }
 
-  /** from から days 日分の予定を用意する（覚えていない日があればサーバーに頼む） */
-  function ensureEvents(fromYmd, days) {
-    for (let i = 0; i < days; i++) {
-      if (!EV_LOADED[addDaysYmd(fromYmd, i)]) {
-        return call('getEvents', fromYmd, days).then(list => rememberEvents(list, fromYmd, days));
-      }
-    }
-    return Promise.resolve();
+  /** その日に当たる未完了のタスク（時刻順） */
+  function tasksOnDate(ymd, excludeId) {
+    return T.tasks
+      .filter(t => !t.done && !t.pending && t.id !== excludeId && occursOn(t, ymd))
+      .sort((a, b) => (a.time ? 0 : 1) - (b.time ? 0 : 1) || (a.time || '').localeCompare(b.time || '') || byPriority(a, b));
   }
 
-  function renderCal() {
-    if (!T.today) return;
-    if (!CAL.start) CAL.start = T.today;
-    $('calDate').value = CAL.start;
-    const box = $('calList');
-    const days = [];
-    for (let i = 0; i < CAL_DAYS; i++) days.push(addDaysYmd(CAL.start, i));
-    const missing = days.some(d => !EV_LOADED[d]);
+  /** 繰り返しで当たる回の行（本体の期限とは別の日なので、押しても完了にはしない） */
+  function occurrenceEl(t) {
+    const el = document.createElement('div');
+    el.className = 'task occurrence';
+    el.innerHTML = '<span class="mark" aria-hidden="true">↻</span><div class="body"><div class="ttl"></div><div class="meta"></div></div>';
+    el.querySelector('.ttl').textContent = t.title;
+    el.querySelector('.meta').textContent = [timeLabel(t), t.project, t.repeat + 'の回'].filter(Boolean).join('　');
+    el.querySelector('.body').onclick = () => openEditor(t);
+    return el;
+  }
+
+  // ---- タスクタブの「日付で確認」----
+  function renderDayCheck() {
+    const day = $('dayPick').value;
+    const box = $('dayResult');
     box.innerHTML = '';
-    if (missing) box.appendChild(note('読み込み中…'));
-
-    days.forEach(day => {
-      const n = diffDays(day, T.today);
-      const h = document.createElement('div');
-      h.className = 'sec calday' + (n === 0 ? ' today' : '') + (day === $('calDate').dataset.pick ? ' picked' : '');
-      h.textContent = fmtDate(day) + (n === 0 ? '　今日' : n === 1 ? '　明日' : '');
-      box.appendChild(h);
-
-      const list = document.createElement('div');
-      list.className = 'tasks';
-      const evs = EV[day] || [];
-      evs.forEach(e => list.appendChild(eventEl(e)));
-      // その日が期限のタスクも一緒に（予定の空きを見るときの参考に）
-      T.tasks.filter(t => !t.done && t.due === day).sort(byPriority).forEach(t => list.appendChild(taskEl(t)));
-      if (!list.children.length) {
-        const empty = document.createElement('div');
-        empty.className = 'task empty';
-        empty.textContent = EV_LOADED[day] ? '予定なし' : '…';
-        list.appendChild(empty);
-      }
-      box.appendChild(list);
-    });
-
-    if (missing) {
-      ensureEvents(CAL.start, CAL_DAYS).then(renderCal).catch(e => {
-        box.insertBefore(note('予定を読み込めませんでした：' + errMsg(e), true), box.firstChild);
-      });
-    }
+    $('dayClear').hidden = !day;
+    if (!day || !T.today) return;
+    const items = tasksOnDate(day);
+    const h = document.createElement('div');
+    h.className = 'sec';
+    h.textContent = fmtDate(day) + (items.length ? '　' + items.length + '件' : '　空いています（タスクなし）');
+    box.appendChild(h);
+    if (!items.length) return;
+    const list = document.createElement('div');
+    list.className = 'tasks';
+    items.forEach(t => list.appendChild(t.due === day ? taskEl(t) : occurrenceEl(t)));
+    box.appendChild(list);
   }
+  $('dayPick').addEventListener('change', renderDayCheck);
+  $('dayPick').addEventListener('input', renderDayCheck);
+  $('dayClear').onclick = () => { $('dayPick').value = ''; renderDayCheck(); };
 
-  function moveCal(startYmd, picked) {
-    if (!T.today) return; // データが届く前は動かさない
-    CAL.start = startYmd;
-    $('calDate').dataset.pick = picked || '';
-    renderCal();
-  }
-
-  $('calPrev').onclick = () => moveCal(addDaysYmd(CAL.start || T.today, -CAL_DAYS));
-  $('calNext').onclick = () => moveCal(addDaysYmd(CAL.start || T.today, CAL_DAYS));
-  $('calToday').onclick = () => moveCal(T.today);
-  // 日付を選ぶと、その日から7日分を出す（その日が一番上）
-  $('calDate').onchange = () => { if ($('calDate').value) moveCal($('calDate').value, $('calDate').value); };
-
-  // ---- タスクの編集画面：期限の日の予定を、すぐ下に出す ----
-  let dayInfoSeq = 0;
+  // ---- 編集画面：期限の日のタスクを、すぐ下に出す ----
   function showDayInfo() {
     const box = $('edDayInfo');
-    const day = $('edDue').value;
     box.innerHTML = '';
-    if (!day) return;
-    const seq = ++dayInfoSeq;
-    const paint = () => {
-      if (seq !== dayInfoSeq) return; // 別の日を選び直していたら古い結果は出さない
-      box.innerHTML = '';
-      const evs = EV[day] || [];
-      const tasks = T.tasks.filter(t => !t.done && t.due === day && (!editing || t.id !== editing.id));
-      const head = document.createElement('div');
-      head.className = 'dayinfo-head';
-      head.textContent = fmtDate(day) + 'の予定' + (evs.length ? '' : '：なし') + (tasks.length ? '（この日が期限のタスク ' + tasks.length + '件）' : '');
-      box.appendChild(head);
-      evs.forEach(e => {
-        const r = document.createElement('div');
-        r.textContent = '📅 ' + e.time + '　' + e.title;
-        box.appendChild(r);
-      });
-    };
-    if (EV_LOADED[day]) { paint(); return; }
-    box.textContent = fmtDate(day) + 'の予定を確認中…';
-    ensureEvents(day, 1).then(paint).catch(() => { if (seq === dayInfoSeq) box.textContent = '予定を確認できませんでした'; });
+    const day = $('edDue').value;
+    if (!day || !T.today) return;
+    const items = tasksOnDate(day, editing ? editing.id : null);
+    const head = document.createElement('div');
+    head.className = 'dayinfo-head';
+    head.textContent = fmtDate(day) + 'のほかのタスク' + (items.length ? '' : '：なし');
+    box.appendChild(head);
+    items.forEach(t => {
+      const r = document.createElement('div');
+      r.textContent = (t.time ? '🕘 ' + timeLabel(t) + '　' : '・') + t.title + (t.due !== day ? '（' + t.repeat + '）' : '');
+      box.appendChild(r);
+    });
   }
   $('edDue').addEventListener('change', showDayInfo);
   $('edDue').addEventListener('input', showDayInfo);
@@ -1458,7 +1419,7 @@
   function saveState() {
     writeCache({
       tasks: {
-        today: T.today, projects: T.projects, events: T.events, eventDays: T.eventDays, repeatRules: T.repeatRules,
+        today: T.today, projects: T.projects, repeatRules: T.repeatRules,
         tasks: T.tasks.filter(t => !t.pending)
       },
       reminders: lastRemindData
