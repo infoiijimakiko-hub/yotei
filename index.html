@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
+<base target="_top">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>予定</title>
@@ -10,65 +11,1306 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
-  :root { --bg: #f6f7f9; --text: #1f2328; --sub: #667085; --blue: #1a73e8; --card: #fff; --line: #e4e7ec; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --bg: #16181d; --text: #eceef2; --sub: #9aa3b2; --card: #1f2229; --line: #2e323b; }
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1f2328; --sub: #667085; --line: #e4e7ec;
+    --blue: #1a73e8; --blue-bg: #e8f0fe; --green: #06c755; --red: #b42318; --red-bg: #fef3f2;
+    --ok: #067647; --ok-bg: #ecfdf3; --star: #f5a524;
   }
-  :root[data-theme="dark"] { --bg: #16181d; --text: #eceef2; --sub: #9aa3b2; --card: #1f2229; --line: #2e323b; }
   * { box-sizing: border-box; }
-  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px;
-    background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif; }
-  main { width: 100%; max-width: 420px; text-align: center; }
-  img { width: 96px; height: 96px; border-radius: 22px; }
-  h1 { margin: 16px 0 4px; font-size: 22px; }
-  p { margin: 8px 0; color: var(--sub); line-height: 1.7; font-size: 14px; }
-  .btn { display: inline-block; margin-top: 16px; padding: 12px 24px; border-radius: 10px; background: var(--blue); color: #fff; text-decoration: none; font-weight: 700; }
-  .how { margin-top: 24px; padding: 16px; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
-  .how ol { margin: 8px 0 0; padding-left: 20px; line-height: 1.9; font-size: 14px; }
-  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-size: 15px;
+    font-family: system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif; }
+  a { color: var(--blue); }
+  button { padding: 9px 14px; font: inherit; background: #fff; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; color: inherit; }
+  button:disabled { opacity: .5; }
+  button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  button.line { background: var(--green); border-color: var(--green); color: #fff; }
+  button.danger { color: var(--red); border-color: #fda29b; }
+  input, select, textarea { font: inherit; color: inherit; }
+
+  /* ヘッダーとタブ */
+  header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 8px;
+    padding: 8px 16px; background: var(--card); border-bottom: 1px solid var(--line); }
+  .tabs { flex: 1; display: flex; gap: 4px; }
+  .tabs button { border: none; background: none; padding: 10px 12px; border-radius: 8px; color: var(--sub); font-weight: 600; }
+  .tabs button.on { background: var(--blue-bg); color: var(--blue); }
+  .status { color: var(--sub); font-size: 12px; white-space: nowrap; }
+  .count[hidden] { display: none; } /* 下の display 指定が hidden を打ち消さないように */
+  .count { display: inline-block; min-width: 20px; margin-left: 6px; padding: 0 6px; border-radius: 99px;
+    background: var(--red); color: #fff; font-size: 12px; line-height: 20px; text-align: center; }
+  main { max-width: 720px; margin: 0 auto; padding: 16px; }
+  .range { margin: 0 0 12px; color: var(--sub); font-size: 13px; }
+  .note { padding: 20px; line-height: 1.7; white-space: pre-line; color: var(--sub); background: var(--card); border: 1px dashed var(--line); border-radius: 12px; }
+  .note.error { color: var(--red); border-color: #fda29b; }
+  details { margin-top: 16px; color: var(--sub); font-size: 13px; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+  /* リマインド */
+  .card { margin-bottom: 14px; padding: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  .card.sent { opacity: .6; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+  .name { font-size: 16px; font-weight: 700; }
+  .when { color: var(--sub); font-size: 13px; }
+  .badge { padding: 2px 8px; border-radius: 99px; font-size: 12px; white-space: nowrap; background: var(--red-bg); color: var(--red); }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .card textarea { width: 100%; min-height: 120px; padding: 10px; line-height: 1.6;
+    border: 1px solid var(--line); border-radius: 8px; resize: vertical; }
+  .hint { margin-top: 6px; color: var(--red); font-size: 13px; }
+
+  /* タスク：追加欄と絞り込み */
+  .quick { display: flex; gap: 8px; margin-bottom: 12px; }
+  .quick input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 8px; }
+  .chips button { flex: none; padding: 6px 12px; border-radius: 99px; font-size: 13px; }
+  .chips button.on { background: var(--text); border-color: var(--text); color: #fff; }
+
+  /* タスク：予定と一覧 */
+  .events { margin-bottom: 14px; padding: 10px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  /* カレンダーの予定（今日・明日の欄にタスクと一緒に並ぶ。チェックはない） */
+  .task.event { background: #f9fafb; }
+  .task.event .evtime { flex: none; width: 24px; margin-top: 1px; text-align: center; font-size: 16px; }
+  .task.event .body { cursor: default; }
+  .sec { margin: 18px 0 6px; font-size: 13px; font-weight: 700; color: var(--sub); }
+  .sec.overdue { color: var(--red); }
+  .tasks { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .task { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--line); }
+  .task:first-child { border-top: none; }
+  .task.pending { opacity: .55; pointer-events: none; } /* 追加したばかりで保存が終わっていないもの */
+  .task .check { flex: none; width: 24px; height: 24px; padding: 0; margin-top: 1px; border: 2px solid #98a2b3; border-radius: 50%; background: #fff; }
+  .task.done .check { background: var(--ok); border-color: var(--ok); }
+  .task.done .check::after { content: "✓"; color: #fff; font-size: 14px; line-height: 20px; }
+  .task.done .ttl { text-decoration: line-through; color: var(--sub); }
+  .task .body { flex: 1; min-width: 0; cursor: pointer; }
+  .task .ttl { line-height: 1.4; word-break: break-word; }
+  .task .meta { margin-top: 2px; display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--sub); font-size: 12px; }
+  .task .meta .due.over { color: var(--red); font-weight: 600; }
+  .dot { display: inline-block; width: 8px; height: 8px; margin-right: 4px; border-radius: 50%; vertical-align: middle; }
+  .task .star { flex: none; padding: 0 4px; border: none; background: none; font-size: 18px; color: #d0d5dd; }
+  .task .star.on { color: var(--star); }
+
+  /* 編集画面 */
+  .modal { position: fixed; inset: 0; z-index: 10; display: flex; align-items: flex-end; justify-content: center; background: rgba(16, 24, 40, .45); }
+  .modal[hidden] { display: none; }
+  .sheet { width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; padding: 16px; background: var(--card); border-radius: 16px 16px 0 0; }
+  @media (min-width: 600px) { .modal { align-items: center; } .sheet { border-radius: 16px; } }
+  .sheet .field { display: block; margin-top: 12px; font-size: 13px; color: var(--sub); }
+  .sheet .field > input, .sheet .field > select, .sheet .field > textarea { display: block; width: 100%; margin-top: 4px;
+    padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-size: 15px; }
+  .sheet .big { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 17px; }
+  .sheet .quickdates { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .sheet .quickdates button { padding: 5px 10px; font-size: 13px; }
+  .sheet .row { display: flex; gap: 12px; }
+  .sheet .row .field { flex: 1; }
+  .sheet .check-line { display: flex; align-items: center; gap: 8px; margin-top: 14px; color: var(--text); }
+
+  /* 完了したときの「元に戻す」 */
+  .toast { position: fixed; left: 50%; bottom: 20px; z-index: 20; transform: translateX(-50%); display: flex; gap: 12px; align-items: center;
+    max-width: calc(100% - 32px); padding: 10px 14px; border-radius: 10px; background: #1f2328; color: #fff; font-size: 14px; }
+  .toast[hidden] { display: none; }
+  .toast button { padding: 4px 10px; border: none; background: none; color: #8ab4f8; font-weight: 700; }
 </style>
+
 </head>
 <body>
-<main>
-  <img src="icon-192.png" alt="">
-  <h1>予定</h1>
-
-  <!-- ホーム画面のアイコンから開いたとき：すぐアプリへ移動する -->
-  <div id="launching" hidden>
-    <p>開いています…</p>
-    <p><a id="fallback" href="#">開かないときはこちら</a></p>
-  </div>
-
-  <!-- このページを直接開いたとき：ホーム画面への追加の案内 -->
-  <div id="setup" hidden>
-    <a id="open" class="btn" href="#">アプリを開く</a>
-    <div class="how">
-      <strong>ホーム画面に追加する方法</strong>
-      <ol>
-        <li>授業アカウントでログインしているブラウザ（Edge）でこのページを開く</li>
-        <li>ブラウザのメニュー（≡ または ︙）を開く</li>
-        <li>「電話に追加」「アプリをインストール」または「ホーム画面に追加」を選ぶ</li>
-      </ol>
-    </div>
-  </div>
-</main>
+<script>const API_URL = "https://script.google.com/macros/s/AKfycbzi4dXPE4F-PtbiRfgSOSdpYft6rpVaKZWJJZNNcZPrejIOE3ZybbmsLnDke10deqQE/exec";</script>
 <script>
-  // 移動先：スケジュール管理アプリ（Apps Script）。開けるのは授業アカウントだけ
-  const APP_URL = 'https://script.google.com/a/macros/yswisecompany.com/s/AKfycbzi4dXPE4F-PtbiRfgSOSdpYft6rpVaKZWJJZNNcZPrejIOE3ZybbmsLnDke10deqQE/exec';
+  // サーバーが画面と一緒に持たせてくれた最初のデータ（取れなかったときは null）
+  const INITIAL_DATA = null;
+</script>
+<header>
+  <nav class="tabs">
+    <button type="button" data-tab="tasks">タスク</button>
+    <button type="button" data-tab="remind">リマインド<span id="remindCount" class="count" hidden></span></button>
+    <button type="button" data-tab="health">健康</button>
+  </nav>
+  <span id="status" class="status"></span>
+  <button id="reload" type="button" title="カレンダーとタスクを読み直す">読み直す</button>
+</header>
 
-  document.getElementById('fallback').href = APP_URL;
-  document.getElementById('open').href = APP_URL;
+<main>
+  <!-- タスク -->
+  <section id="tab-tasks">
+    <form id="quickAdd" class="quick" autocomplete="off">
+      <input id="qaTitle" placeholder="タスクを追加…" enterkeyhint="done">
+      <button id="qaBtn" class="primary" type="submit">追加</button>
+      <button id="qaDetail" type="button" title="期限・繰り返しなどを指定して追加">詳しく</button>
+    </form>
+    <div id="chips" class="chips"></div>
+    <div id="taskList"></div>
+    <details id="doneBox" hidden>
+      <summary id="doneSummary"></summary>
+      <div id="doneList"></div>
+    </details>
+  </section>
 
-  // 2回目以降はこのページ自体を端末に保存しておき、一瞬で開けるようにする
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  <!-- リマインド -->
+  <section id="tab-remind" hidden>
+    <p class="range" id="rRange">読み込み中…</p>
+    <div id="rList"></div>
+    <details id="rUnmatchedBox" hidden>
+      <summary>生徒と結びつかなかった予定</summary>
+      <ul id="rUnmatched"></ul>
+      <p>予定名に「生徒」シートの「カレンダー検索語」が入っていると、その生徒の授業として扱います。</p>
+    </details>
+    <p class="range" style="margin-top:20px"><a id="rSheet" href="#" target="_blank" hidden>文面・生徒の設定を開く（スプレッドシート）</a></p>
+  </section>
 
-  // ホーム画面のアイコンから開いたとき（?launch=1 付き）だけ、すぐアプリへ移動する
-  if (new URLSearchParams(location.search).has('launch')) {
-    document.getElementById('launching').hidden = false;
-    location.replace(APP_URL);
-  } else {
-    document.getElementById('setup').hidden = false;
+  <!-- 健康（ダイエット）：中身は js_health.html が組み立てる -->
+  <section id="tab-health" hidden>
+    <div id="healthBody"></div>
+  </section>
+
+  <!-- 画面を直したら数字を上げる。公開中の画面が最新かどうかの目印 -->
+  <p class="range" style="margin-top:24px">画面の版：v14（2026-09-27）<span id="perf"></span></p>
+</main>
+
+<!-- タスクの編集画面 -->
+<div id="editor" class="modal" hidden>
+  <form id="edForm" class="sheet" autocomplete="off">
+    <h2 id="edHeading" style="margin:0 0 10px;font-size:16px">タスクを編集</h2>
+    <input id="edTitle" class="big" placeholder="タスク名" required>
+    <label class="field">プロジェクト<select id="edProject"></select></label>
+    <label class="field">期限<input id="edDue" type="date"></label>
+    <div class="quickdates">
+      <button type="button" data-d="0">今日</button>
+      <button type="button" data-d="1">明日</button>
+      <button type="button" data-d="7">1週間後</button>
+      <button type="button" data-d="">期限なし</button>
+    </div>
+    <div class="row">
+      <label class="field">繰り返し<select id="edRepeat"></select></label>
+      <label class="field">所要時間<select id="edMinutes"></select></label>
+    </div>
+    <label class="check-line"><input id="edStar" type="checkbox"> ★ 優先（プライオリティ）</label>
+    <label class="field">メモ<textarea id="edMemo" rows="4"></textarea></label>
+    <div class="btns">
+      <button id="edSave" class="primary" type="submit">保存</button>
+      <button id="edCancel" type="button">キャンセル</button>
+      <button id="edDelete" class="danger" type="button" style="margin-left:auto">削除</button>
+    </div>
+  </form>
+</div>
+
+<!-- 合言葉の入力（GitHub上の画面で、初めて開くときだけ出る） -->
+<div id="tokenScreen" class="modal" hidden>
+  <form id="tokenForm" class="sheet" autocomplete="off">
+    <h2 style="margin:0 0 8px;font-size:16px">合言葉を入れてください</h2>
+    <p id="tokenMsg" class="range">このスマホ（PC）で初めて開くときだけ必要です。</p>
+    <input id="tokenInput" class="big" placeholder="合言葉" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <div class="btns"><button class="primary" type="submit">保存して開く</button></div>
+  </form>
+</div>
+
+<div id="toast" class="toast" hidden><span id="toastText"></span><button id="toastUndo" type="button">元に戻す</button></div>
+
+<script>
+  // ---- 画面全体で共通に使うもの ----
+  const $ = id => document.getElementById(id);
+
+  // 「LINEで送る」はスマホのLINEアプリを開く仕組みで、PCではLINEのトップページに飛ぶだけなので、スマホでだけ出す
+  // （iPadは「Mac」と名乗るので、タッチ操作できるかで見分ける）
+  const IS_PHONE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  const IS_ANDROID = /Android/i.test(navigator.userAgent);
+
+  // ---- サーバー（Apps Script）への頼み方 ----
+  // Googleの画面の中で動いているときは google.script.run、GitHub上の画面では合言葉付きで窓口（窓口.gs）に頼む
+  const IN_GAS = typeof google !== 'undefined' && !!(google.script && google.script.run);
+  const TOKEN_KEY = 'apiToken';
+
+  function getToken() {
+    try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; }
+  }
+  function setToken(t) {
+    try { localStorage.setItem(TOKEN_KEY, t); } catch (e) { /* 保存できないと毎回の入力が必要になる */ }
+  }
+  // 合言葉入りの案内リンク（…/#t=合言葉）から開いたら、合言葉を保存して、アドレスからは消す
+  (() => {
+    const m = location.hash.match(/[#&]t=([^&]+)/);
+    if (!m) return;
+    setToken(decodeURIComponent(m[1]));
+    history.replaceState(null, '', location.pathname + location.search);
+  })();
+
+  /** サーバー側（.gs）の関数を呼ぶ。結果は Promise で受け取る */
+  function call(name, ...args) {
+    if (IN_GAS) {
+      return new Promise((resolve, reject) => {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args);
+      });
+    }
+    return callApi(name, args);
+  }
+
+  async function callApi(name, args) {
+    const token = getToken();
+    if (!token) {
+      showTokenScreen();
+      throw new Error('合言葉が設定されていません');
+    }
+    let res;
+    try {
+      // text/plain で送る（Googleの窓口は、この送り方なら他のサイトからでも受け付けてくれる）
+      res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ token: token, fn: name, args: args }) });
+    } catch (e) {
+      throw new Error('通信できませんでした（電波の状態を確認してください）');
+    }
+    let data;
+    try { data = await res.json(); } catch (e) { throw new Error('Googleからの返事を読み取れませんでした'); }
+    if (!data.ok) {
+      if (data.auth) showTokenScreen('合言葉が違います。入れ直してください。');
+      throw new Error(data.error);
+    }
+    return data.result;
+  }
+
+  /** 合言葉の入力画面（このスマホ・PCで初めて開くときだけ） */
+  function showTokenScreen(msg) {
+    if (msg) $('tokenMsg').textContent = msg;
+    $('tokenScreen').hidden = false;
+    $('tokenInput').focus();
+  }
+
+  /** この端末での今日の日付（2026-09-23 の形） */
+  function todayLocal() {
+    const d = new Date();
+    const p = n => (n < 10 ? '0' : '') + n;
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+
+  function errMsg(e) {
+    return e && e.message ? e.message : String(e);
+  }
+
+  function showError(e) {
+    alert('うまくいきませんでした：' + errMsg(e));
+  }
+
+  // ---- 速さのための仕組み ----
+  // 1) 前回の内容をこの端末に覚えておき、開いた瞬間に表示する（裏で最新に差し替える）
+  const CACHE_KEY = 'appData_v1';
+  // 枠の中の画面では、端末に覚えさせる機能が使えないことがある（使えるかどうかを画面下に出す）
+  const STORAGE_OK = (() => {
+    try { localStorage.setItem('__t', '1'); localStorage.removeItem('__t'); return true; } catch (e) { return false; }
+  })();
+  function readCache() {
+    try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch (e) { return null; }
+  }
+  function writeCache(data) {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch (e) { /* 保存できなくても動作に支障なし */ }
+  }
+
+  // 2) 押した瞬間に画面を変え、サーバーへの保存は裏で行う。保存中はヘッダーに「保存中…」
+  let pendingSaves = 0;
+  function sync(promise) {
+    pendingSaves++;
+    paintStatus();
+    return promise.finally(() => { pendingSaves--; paintStatus(); });
+  }
+  let refreshing = false;
+  function paintStatus() {
+    $('status').textContent = pendingSaves ? '保存中…' : refreshing ? '更新中…' : '';
+  }
+
+  // 3) 同じタスクへの操作（完了→元に戻す など）は、押した順にサーバーへ送る
+  const queues = {};
+  function enqueue(key, fn) {
+    const p = (queues[key] || Promise.resolve()).catch(() => {}).then(fn);
+    queues[key] = p;
+    return p;
+  }
+
+  function note(text, isError) {
+    const d = document.createElement('div');
+    d.className = 'note' + (isError ? ' error' : '');
+    d.textContent = text;
+    return d;
+  }
+
+  /** 入力欄の高さを文面の長さに合わせる */
+  function fit(ta) {
+    // 画面の幅が決まる前（や隠れているタブ）で測ると異常な高さになるので測らない（rows の高さのまま）
+    if (ta.clientWidth < 150) return;
+    ta.style.height = 'auto';
+    ta.style.height = (ta.scrollHeight + 2) + 'px';
+  }
+  function fitAll() {
+    document.querySelectorAll('.card textarea').forEach(fit);
+  }
+  // スマホの向きを変えたときなど、幅が変わったら測り直す
+  window.addEventListener('resize', fitAll);
+
+  // ---- タブ ----
+  const TABS = ['tasks', 'remind', 'health'];
+
+  function showTab(name) {
+    TABS.forEach(t => {
+      $('tab-' + t).hidden = t !== name;
+      document.querySelector('[data-tab="' + t + '"]').classList.toggle('on', t === name);
+    });
+    try { localStorage.setItem('tab', name); } catch (e) { /* 保存できなくても動作に支障なし */ }
+    requestAnimationFrame(fitAll); // 隠れていたタブの入力欄はここで高さを合わせる
+  }
+
+  document.querySelectorAll('[data-tab]').forEach(b => { b.onclick = () => showTab(b.dataset.tab); });
+</script>
+
+<script>
+  // ---- リマインド（授業の前日連絡）----
+  const URL_PLACEHOLDER = '【ここにURLを貼り付け】'; // コード.gs と同じ文字列
+  let reminders = [];
+  let lastRemindData = null; // 端末に覚えておく用
+
+  /** LINEの「送り先を選ぶ」画面を、文面入りで開く */
+  function openLine(text) {
+    const share = 'https://line.me/R/share?text=' + encodeURIComponent(text);
+    if (!IS_ANDROID) {
+      window.open(share, '_blank');
+      return;
+    }
+    // Androidは「LINEアプリで開いて」と直接呼び出す（intent）。途中のウェブページのタブが残らない。
+    // LINEが入っていないときだけ、ふつうのウェブページに切り替わる
+    const intent = 'intent://line.me/R/share?text=' + encodeURIComponent(text) +
+      '#Intent;scheme=https;package=jp.naver.line.android;' +
+      'S.browser_fallback_url=' + encodeURIComponent(share) + ';end';
+    const a = document.createElement('a');
+    a.href = intent;
+    a.target = '_top'; // Apps Script の画面は枠の中なので、枠の外（ブラウザ本体）から呼び出す
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  /** タブに「明日の授業で未送信」の件数を出す（送り忘れ防止） */
+  function updateRemindCount() {
+    const n = reminders.filter(i => i.dayIndex === 1 && !i.sentAt).length;
+    $('remindCount').textContent = n;
+    $('remindCount').hidden = n === 0;
+  }
+
+  function renderReminders(data) {
+    lastRemindData = data;
+    if (data.error) {
+      reminders = [];
+      $('rRange').textContent = '';
+      $('rList').innerHTML = '';
+      $('rList').appendChild(note('エラー：' + data.error, true));
+      updateRemindCount();
+      return;
+    }
+    reminders = data.items;
+    $('rRange').textContent = data.range + ' の授業（' + data.items.length + '件）';
+    if (data.sheetUrl) { $('rSheet').href = data.sheetUrl; $('rSheet').hidden = false; }
+
+    const list = $('rList');
+    list.innerHTML = '';
+    if (data.warnings && data.warnings.length) list.appendChild(note(data.warnings.join('\n'), true));
+    if (!data.items.length) list.appendChild(note('この期間の授業はカレンダーにありません。'));
+    data.items.forEach(item => list.appendChild(reminderCard(item)));
+    requestAnimationFrame(fitAll); // 画面に描かれてからでないと高さが測れない
+
+    const um = $('rUnmatched');
+    um.innerHTML = '';
+    data.unmatched.forEach(t => {
+      const li = document.createElement('li');
+      li.textContent = t;
+      um.appendChild(li);
+    });
+    $('rUnmatchedBox').hidden = !data.unmatched.length;
+    updateRemindCount();
+  }
+
+  function reminderCard(item) {
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.innerHTML =
+      '<div class="head"><div><div class="name"></div><div class="when"></div></div><span class="badge"></span></div>' +
+      '<textarea></textarea>' +
+      '<div class="hint" hidden>URLを貼り付けてから送ってください</div>' +
+      '<div class="btns">' +
+        '<button class="primary" data-act="copy">コピー</button>' +
+        '<button class="line" data-act="line">LINEで送る</button>' +
+        '<button data-act="sent"></button>' +
+      '</div>';
+    el.querySelector('.name').textContent = item.student;
+    el.querySelector('.when').textContent = item.when;
+    const ta = el.querySelector('textarea');
+    ta.value = item.text;
+    ta.rows = Math.max(4, item.text.split('\n').length + 1); // 高さを測れないときでも全文がほぼ見える高さ
+    const hint = el.querySelector('.hint');
+    const checkHint = () => { hint.hidden = ta.value.indexOf(URL_PLACEHOLDER) === -1; };
+    checkHint();
+    ta.addEventListener('input', () => { fit(ta); checkHint(); });
+    const badge = el.querySelector('.badge');
+    const sentBtn = el.querySelector('[data-act="sent"]');
+
+    function paint() {
+      el.classList.toggle('sent', !!item.sentAt);
+      badge.className = 'badge' + (item.sentAt ? ' ok' : '');
+      badge.textContent = item.sentAt ? '送信済み ' + item.sentAt : '未送信';
+      sentBtn.textContent = item.sentAt ? '未送信に戻す' : '送信済みにする';
+      updateRemindCount();
+    }
+    paint();
+
+    el.querySelector('[data-act="copy"]').onclick = e => copyText(ta, e.currentTarget);
+    // スマホではLINEアプリが開き、送り先のグループを選べる
+    const lineBtn = el.querySelector('[data-act="line"]');
+    lineBtn.hidden = !IS_PHONE;
+    lineBtn.onclick = () => openLine(ta.value);
+    sentBtn.onclick = () => {
+      sentBtn.disabled = true;
+      call('setSent', item.key, item.student, item.when, !item.sentAt)
+        .then(at => { item.sentAt = at; paint(); saveState(); })
+        .catch(e => alert('記録できませんでした：' + errMsg(e)))
+        .finally(() => { sentBtn.disabled = false; });
+    };
+    return el;
+  }
+
+  async function copyText(ta, btn) {
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(ta.value);
+      ok = true;
+    } catch (e) {
+      // Apps Script の画面ではクリップボードAPIが使えないことがあるので、昔ながらの方法で再試行
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+    }
+    btn.textContent = ok ? 'コピーしました' : '長押しでコピーしてください';
+    setTimeout(() => { btn.textContent = 'コピー'; }, 1800);
   }
 </script>
+
+<script>
+  // ---- タスク（Nozbeの置き換え）----
+  // 操作は「先に画面を変える → 裏でサーバーに保存 → 失敗したら元に戻して知らせる」の順で行う（速さのため）
+  const T = { today: '', tasks: [], projects: [], events: [], repeatRules: [], filter: 'all' };
+  const MINUTE_CHOICES = [0, 15, 30, 45, 60, 90, 120, 180, 240];
+  const WEEK = '日月火水木金土';
+  const NEW_PROJECT = '__new__';
+  const DAY = 86400000;
+  let tmpSeq = 0;
+
+  // 日付は「2026-09-22」の文字で扱う。計算は時差の影響を受けないよう世界標準時で行う
+  function ymdToUtc(s) {
+    const p = s.split('-').map(Number);
+    return Date.UTC(p[0], p[1] - 1, p[2]);
+  }
+  function utcToYmd(ms) {
+    return new Date(ms).toISOString().slice(0, 10);
+  }
+  function addDaysYmd(s, n) {
+    return utcToYmd(ymdToUtc(s) + n * DAY);
+  }
+  /** a − b の日数 */
+  function diffDays(a, b) {
+    return Math.round((ymdToUtc(a) - ymdToUtc(b)) / DAY);
+  }
+  function fmtDate(s) {
+    const d = new Date(ymdToUtc(s));
+    const md = (d.getUTCMonth() + 1) + '/' + d.getUTCDate() + '（' + WEEK[d.getUTCDay()] + '）';
+    return d.getUTCFullYear() === Number(T.today.slice(0, 4)) ? md : d.getUTCFullYear() + '/' + md;
+  }
+  function dueLabel(s) {
+    const n = diffDays(s, T.today);
+    if (n === 0) return '今日';
+    if (n === 1) return '明日';
+    if (n === -1) return '昨日';
+    return fmtDate(s);
+  }
+  function fmtMinutes(m) {
+    const h = Math.floor(m / 60);
+    const r = m % 60;
+    return ((h ? h + '時間' : '') + (r ? r + '分' : '')) || '0分';
+  }
+  function nowLocal() {
+    const d = new Date();
+    const p = n => (n < 10 ? '0' : '') + n;
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  /**
+   * 繰り返しの次の期限（画面をすぐ変えるための計算。正式な値はサーバー＝タスク.gs の nextDue_ が返す）。
+   * 決まりはサーバーと同じ：今日より後になるまで進める。月の日付は最初の日にそろえ、ない日は月末に寄せる
+   */
+  function nextDueClient(due, rule, today) {
+    const anchor = ymdToUtc(due);
+    const anchorDay = new Date(anchor).getUTCDate();
+    const t = ymdToUtc(today);
+    let d = anchor;
+    for (let i = 0; i < 5000; i++) {
+      d = stepClient(d, rule, anchorDay);
+      if (d > t) return utcToYmd(d);
+    }
+    return due;
+  }
+  function stepClient(ms, rule, anchorDay) {
+    const d = new Date(ms);
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth();
+    const months = n => Date.UTC(y, m + n, Math.min(anchorDay, new Date(Date.UTC(y, m + n + 1, 0)).getUTCDate()));
+    switch (rule) {
+      case '毎日': return ms + DAY;
+      case '平日': {
+        let n = ms + DAY;
+        while ([0, 6].indexOf(new Date(n).getUTCDay()) !== -1) n += DAY;
+        return n;
+      }
+      case '毎週': return ms + 7 * DAY;
+      case '隔週': return ms + 14 * DAY;
+      case '毎月': return months(1);
+      case '毎月末': return Date.UTC(y, m + 2, 0);
+      case '2か月ごと': return months(2);
+      case '3か月ごと': return months(3);
+      case '半年ごと': return months(6);
+      case '毎年': return months(12);
+      default: return ms + DAY;
+    }
+  }
+
+  function projectColor(name) {
+    const p = T.projects.find(x => x.name === name);
+    return p ? p.color : '#98a2b3';
+  }
+  function isDoneToday(t) {
+    return t.done && t.doneAt.slice(0, 10) === T.today;
+  }
+  function isProjectFilter() {
+    return T.filter !== 'all' && T.filter !== 'star';
+  }
+  function matchesFilter(t) {
+    if (T.filter === 'all') return true;
+    if (T.filter === 'star') return t.star;
+    return t.project === T.filter;
+  }
+  /** ★が先、次に期限の早い順、最後に作った順 */
+  function byPriority(a, b) {
+    return (Number(b.star) - Number(a.star)) ||
+      (a.due || '9999-12-31').localeCompare(b.due || '9999-12-31') ||
+      a.createdAt.localeCompare(b.createdAt);
+  }
+  function findTask(id) {
+    return T.tasks.find(x => x.id === id);
+  }
+  function replaceTask(t) {
+    const i = T.tasks.findIndex(x => x.id === t.id);
+    if (i === -1) T.tasks.push(t); else T.tasks[i] = t;
+  }
+  function removeTask(id) {
+    T.tasks = T.tasks.filter(x => x.id !== id);
+  }
+
+  /** サーバーから届いたタスクのデータを反映する（ほかの端末で変えた内容もここで反映される） */
+  function applyTaskData(d) {
+    const filter = T.filter;
+    const unsaved = T.tasks.filter(t => t.pending); // 追加したばかりで保存中のものは消さずに残す
+    Object.assign(T, d, { filter: filter });
+    T.tasks = T.tasks.concat(unsaved.filter(u => !findTask(u.id)));
+    renderTasks();
+  }
+
+  // ---- 表示 ----
+
+  function renderTasks() {
+    renderChips();
+
+    const open = T.tasks.filter(t => !t.done && matchesFilter(t));
+    const tomorrow = addDaysYmd(T.today, 1);
+    // 今日・明日の欄には、カレンダーの予定（授業など）もタスクと一緒に並べる。プロジェクトで絞り込み中は出さない
+    const eventsOn = day => (T.filter === 'all' ? T.events.filter(e => e.date === day) : []);
+    const groups = [
+      { title: '期限切れ', cls: 'overdue', test: t => t.due && t.due < T.today },
+      { title: '今日 ' + (T.today ? fmtDate(T.today) : ''), events: eventsOn(T.today), test: t => t.due === T.today },
+      { title: '明日 ' + (T.today ? fmtDate(tomorrow) : ''), events: eventsOn(tomorrow), test: t => t.due === tomorrow },
+      { title: '7日以内', test: t => t.due && diffDays(t.due, T.today) >= 2 && diffDays(t.due, T.today) <= 7 },
+      { title: 'それ以降', test: t => t.due && diffDays(t.due, T.today) > 7 },
+      { title: '期限なし', test: t => !t.due }
+    ];
+    const box = $('taskList');
+    box.innerHTML = '';
+    let shown = 0;
+    groups.forEach(g => {
+      const items = open.filter(g.test).sort(byPriority);
+      const evs = g.events || [];
+      if (!items.length && !evs.length) return;
+      shown++;
+      const h = document.createElement('div');
+      h.className = 'sec' + (g.cls ? ' ' + g.cls : '');
+      h.textContent = g.title + (items.length ? '　' + items.length + '件' : '');
+      box.appendChild(h);
+      const list = taskList(items);
+      evs.slice().reverse().forEach(e => list.prepend(eventEl(e))); // 予定は時刻順に、タスクより上に
+      box.appendChild(list);
+    });
+    if (!shown) box.appendChild(note(T.filter === 'all' ? '未完了のタスクはありません。' : 'この絞り込みに当てはまるタスクはありません。'));
+
+    // 今日完了したもの（Nozbeの「完了したタスク：6（3時間10分）」にあたる）
+    const done = T.tasks.filter(isDoneToday).filter(matchesFilter);
+    const minutes = done.reduce((s, t) => s + (t.minutes || 0), 0);
+    $('doneSummary').textContent = '今日完了したタスク：' + done.length + '件' + (minutes ? '（合計 ' + fmtMinutes(minutes) + '）' : '');
+    $('doneList').innerHTML = '';
+    if (done.length) $('doneList').appendChild(taskList(done));
+    $('doneBox').hidden = !done.length;
+  }
+
+  function taskList(items) {
+    const list = document.createElement('div');
+    list.className = 'tasks';
+    items.forEach(t => list.appendChild(taskEl(t)));
+    return list;
+  }
+
+  function renderChips() {
+    const counts = {};
+    let total = 0;
+    let stars = 0;
+    T.tasks.filter(t => !t.done).forEach(t => {
+      counts[t.project] = (counts[t.project] || 0) + 1;
+      total++;
+      if (t.star) stars++;
+    });
+    // タスクが1件もないプロジェクトは出さない（選んでいる最中のものは残す）
+    const names = T.projects.map(p => p.name);
+    Object.keys(counts).forEach(n => { if (names.indexOf(n) === -1) names.push(n); });
+    const shown = names.filter(n => counts[n] || n === T.filter);
+    const chips = [{ key: 'all', label: 'すべて ' + total }, { key: 'star', label: '★ ' + stars }]
+      .concat(shown.map(n => ({ key: n, label: n + ' ' + (counts[n] || 0), color: projectColor(n) })));
+
+    const box = $('chips');
+    box.innerHTML = '';
+    chips.forEach(c => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = T.filter === c.key ? 'on' : '';
+      if (c.color) {
+        const d = document.createElement('span');
+        d.className = 'dot';
+        d.style.background = c.color;
+        b.appendChild(d);
+      }
+      b.appendChild(document.createTextNode(c.label));
+      b.onclick = () => { T.filter = c.key; renderTasks(); };
+      box.appendChild(b);
+    });
+    $('qaTitle').placeholder = 'タスクを追加' + (isProjectFilter() ? '（' + T.filter + '）' : '') + '…';
+  }
+
+  /** カレンダーの予定の行（タスクと同じ見た目で、チェックの代わりにカレンダーの印） */
+  function eventEl(e) {
+    const el = document.createElement('div');
+    el.className = 'task event';
+    el.innerHTML = '<span class="evtime" aria-hidden="true">📅</span><div class="body"><div class="ttl"></div><div class="meta"></div></div>';
+    el.querySelector('.ttl').textContent = e.title;
+    el.querySelector('.meta').textContent = e.time + '・カレンダーの予定';
+    return el;
+  }
+
+  function taskEl(t) {
+    const el = document.createElement('div');
+    el.className = 'task' + (t.done ? ' done' : '') + (t.pending ? ' pending' : '');
+    el.innerHTML = '<button class="check" type="button"></button>' +
+      '<div class="body"><div class="ttl"></div><div class="meta"></div></div>' +
+      '<button class="star" type="button" aria-label="優先"></button>';
+    el.querySelector('.check').setAttribute('aria-label', t.done ? '未完了に戻す' : '完了にする');
+    el.querySelector('.ttl').textContent = t.title;
+
+    const meta = el.querySelector('.meta');
+    const add = (text, cls) => {
+      const s = document.createElement('span');
+      if (cls) s.className = cls;
+      s.textContent = text;
+      meta.appendChild(s);
+      return s;
+    };
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = projectColor(t.project);
+    add(t.project).prepend(dot);
+    if (t.due) add(dueLabel(t.due), 'due' + (!t.done && t.due < T.today ? ' over' : ''));
+    if (t.repeat) add('↻ ' + t.repeat);
+    if (t.minutes) add('⏱ ' + fmtMinutes(t.minutes));
+    if (t.memo) add('📝 メモあり');
+
+    const star = el.querySelector('.star');
+    star.textContent = t.star ? '★' : '☆';
+    star.classList.toggle('on', !!t.star);
+
+    el.querySelector('.check').onclick = () => (t.done ? reopen(t) : complete(t));
+    el.querySelector('.body').onclick = () => openEditor(t);
+    star.onclick = () => toggleStar(t);
+    return el;
+  }
+
+  // ---- 操作（先に画面を変え、裏で保存）----
+
+  function addTask(input) {
+    const tmp = Object.assign({
+      id: 'tmp-' + (++tmpSeq), project: 'Inbox', due: '', repeat: '', star: false, minutes: 0, memo: '',
+      done: false, doneAt: '', createdAt: nowLocal(), pending: true // pending：保存が終わるまで操作できない
+    }, input);
+    if (tmp.repeat && !tmp.due) tmp.due = T.today;
+    T.tasks.push(tmp);
+    renderTasks();
+    sync(call('saveTask', input).then(t => { removeTask(tmp.id); replaceTask(t); renderTasks(); saveState(); }))
+      .catch(e => { removeTask(tmp.id); renderTasks(); showError(e); });
+  }
+
+  function updateTask(orig, input) {
+    const merged = Object.assign({}, orig, input);
+    if (merged.repeat && !merged.due) merged.due = T.today;
+    replaceTask(merged);
+    renderTasks();
+    sync(enqueue(orig.id, () => call('saveTask', merged)).then(t => { replaceTask(t); renderTasks(); saveState(); }))
+      .catch(e => { replaceTask(orig); renderTasks(); showError(e); });
+  }
+
+  function complete(t) {
+    const before = Object.assign({}, t);
+    let tmpRecord = null;
+    let nextLabel = '';
+    if (t.repeat) {
+      // 繰り返し：完了の記録を残し、元のタスクは次の期限へ（サーバーと同じ動きを先に画面で行う）
+      tmpRecord = Object.assign({}, t, { id: 'tmp-' + (++tmpSeq), repeat: '', done: true, doneAt: nowLocal(), pending: true });
+      T.tasks.push(tmpRecord);
+      const next = nextDueClient(t.due || T.today, t.repeat, T.today);
+      replaceTask(Object.assign({}, t, { due: next }));
+      nextLabel = '（次回：' + dueLabel(next) + '）';
+    } else {
+      replaceTask(Object.assign({}, t, { done: true, doneAt: nowLocal() }));
+    }
+    renderTasks();
+
+    let undone = false;
+    const op = enqueue(t.id, () => call('setTaskDone', t.id, true));
+    sync(op.then(res => {
+      if (tmpRecord) removeTask(tmpRecord.id);
+      if (undone) return; // すでに「元に戻す」を押していたら、画面はそのまま
+      if (res.record) T.tasks.push(res.record);
+      replaceTask(res.task);
+      renderTasks();
+      saveState();
+    })).catch(e => {
+      if (tmpRecord) removeTask(tmpRecord.id);
+      replaceTask(before);
+      renderTasks();
+      showError(e);
+    });
+
+    toast('「' + t.title + '」を完了しました' + nextLabel, () => {
+      undone = true;
+      if (tmpRecord) removeTask(tmpRecord.id);
+      replaceTask(before);
+      renderTasks();
+      // サーバーへの取り消しは、完了の保存が終わってから送る（完了が失敗していたら何もしない）
+      const undo = enqueue(t.id, () => op.then(
+        res => {
+          if (res.record) {
+            removeTask(res.record.id);
+            return call('undoRepeatDone', t.id, res.record.id, res.prevDue);
+          }
+          return call('setTaskDone', t.id, false);
+        },
+        () => null
+      ));
+      sync(undo.then(r => {
+        if (!r) return;
+        replaceTask(r.task);
+        renderTasks();
+        saveState();
+      })).catch(showError);
+    });
+  }
+
+  function reopen(t) {
+    const before = Object.assign({}, t);
+    replaceTask(Object.assign({}, t, { done: false, doneAt: '' }));
+    renderTasks();
+    sync(enqueue(t.id, () => call('setTaskDone', t.id, false)).then(r => { replaceTask(r.task); renderTasks(); saveState(); }))
+      .catch(e => { replaceTask(before); renderTasks(); showError(e); });
+  }
+
+  function toggleStar(t) {
+    updateTask(t, { star: !t.star });
+  }
+
+  function deleteTaskNow(t) {
+    removeTask(t.id);
+    renderTasks();
+    sync(enqueue(t.id, () => call('deleteTask', t.id)).then(() => saveState()))
+      .catch(e => { T.tasks.push(t); renderTasks(); showError(e); });
+  }
+
+  $('quickAdd').onsubmit = e => {
+    e.preventDefault();
+    const title = $('qaTitle').value.trim();
+    if (!title) return;
+    addTask({ title: title, project: isProjectFilter() ? T.filter : 'Inbox', star: T.filter === 'star' });
+    $('qaTitle').value = '';
+  };
+  $('qaDetail').onclick = () => openEditor(null);
+  // ---- 編集画面 ----
+
+  let editing = null;
+
+  function fillSelect(sel, pairs, value) {
+    sel.innerHTML = '';
+    pairs.forEach(p => {
+      const o = document.createElement('option');
+      o.value = p[0];
+      o.textContent = p[1];
+      sel.appendChild(o);
+    });
+    sel.value = value;
+  }
+
+  function fillProjects(value) {
+    const names = T.projects.map(p => p.name);
+    if (value && names.indexOf(value) === -1) names.push(value);
+    fillSelect($('edProject'), names.map(n => [n, n]).concat([[NEW_PROJECT, '＋ 新しいプロジェクト…']]), value);
+  }
+
+  function openEditor(t) {
+    editing = t || null;
+    $('edHeading').textContent = t ? 'タスクを編集' : 'タスクを追加';
+    $('edTitle').value = t ? t.title : $('qaTitle').value.trim();
+    fillProjects(t ? t.project : (isProjectFilter() ? T.filter : 'Inbox'));
+    $('edDue').value = t ? t.due : '';
+    fillSelect($('edRepeat'), [['', 'なし']].concat(T.repeatRules.map(r => [r, r])), t ? t.repeat : '');
+    const mins = MINUTE_CHOICES.slice();
+    if (t && t.minutes && mins.indexOf(t.minutes) === -1) mins.push(t.minutes);
+    fillSelect($('edMinutes'), mins.sort((a, b) => a - b).map(m => [String(m), m ? fmtMinutes(m) : 'なし']), String(t ? t.minutes : 0));
+    $('edStar').checked = t ? !!t.star : T.filter === 'star';
+    $('edMemo').value = t ? t.memo : '';
+    $('edDelete').hidden = !t;
+    $('editor').hidden = false;
+    if (!t) $('edTitle').focus();
+  }
+
+  function closeEditor() {
+    $('editor').hidden = true;
+    editing = null;
+  }
+
+  $('edProject').onchange = () => {
+    if ($('edProject').value !== NEW_PROJECT) return;
+    const name = (prompt('新しいプロジェクトの名前') || '').trim();
+    if (!name) { fillProjects(editing ? editing.project : 'Inbox'); return; }
+    // 画面にはすぐ出し、プロジェクト一覧への保存は裏で行う
+    if (!T.projects.some(p => p.name === name)) T.projects.push({ name: name, color: '#667085' });
+    fillProjects(name);
+    sync(call('addProject', name).then(list => { T.projects = list; saveState(); })).catch(showError);
+  };
+
+  document.querySelectorAll('#editor [data-d]').forEach(b => {
+    b.onclick = () => { $('edDue').value = b.dataset.d === '' ? '' : addDaysYmd(T.today, Number(b.dataset.d)); };
+  });
+
+  $('edForm').onsubmit = e => {
+    e.preventDefault();
+    const title = $('edTitle').value.trim();
+    if (!title) { $('edTitle').focus(); return; }
+    const project = $('edProject').value;
+    const input = {
+      title: title,
+      project: project === NEW_PROJECT ? 'Inbox' : project,
+      due: $('edDue').value,
+      repeat: $('edRepeat').value,
+      minutes: Number($('edMinutes').value),
+      star: $('edStar').checked,
+      memo: $('edMemo').value
+    };
+    if (editing) {
+      updateTask(editing, input);
+    } else {
+      addTask(input);
+      $('qaTitle').value = '';
+    }
+    closeEditor();
+  };
+
+  $('edCancel').onclick = closeEditor;
+  $('editor').onclick = e => { if (e.target === $('editor')) closeEditor(); }; // 外側を押したら閉じる
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('editor').hidden) closeEditor(); });
+
+  $('edDelete').onclick = () => {
+    if (!editing) return;
+    const msg = '「' + editing.title + '」を削除しますか？' + (editing.repeat ? '\n（繰り返しの、これから先の回もなくなります）' : '');
+    if (!confirm(msg)) return;
+    const t = editing;
+    closeEditor();
+    deleteTaskNow(t);
+  };
+
+  // ---- 完了したときの「元に戻す」 ----
+
+  let toastTimer = null;
+
+  function toast(text, onUndo) {
+    const el = $('toast');
+    $('toastText').textContent = text;
+    $('toastUndo').hidden = !onUndo;
+    $('toastUndo').onclick = () => {
+      el.hidden = true;
+      clearTimeout(toastTimer);
+      onUndo();
+    };
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.hidden = true; }, 6000);
+  }
+</script>
+
+<style>
+  /* 健康タブ専用（共有のcss.htmlは触らない） */
+  .h-target { display: flex; flex-wrap: wrap; gap: 14px 22px; }
+  .h-target .big { font-size: 22px; font-weight: 700; }
+  .h-target .lbl { color: var(--sub); font-size: 12px; }
+  .h-sub { color: var(--sub); font-size: 13px; }
+  .h-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 480px) { .h-grid { grid-template-columns: 1fr; } }
+  .h-field { display: block; font-size: 13px; color: var(--sub); }
+  .h-field > input, .h-field > select { display: block; width: 100%; margin-top: 4px; padding: 9px 10px;
+    border: 1px solid var(--line); border-radius: 8px; background: #fff; font-size: 15px; }
+  .h-wrow { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+  .h-wrow .h-field { flex: 1; min-width: 96px; }
+  .h-wlist { margin-top: 10px; }
+  .h-witem { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .h-witem .d { width: 92px; color: var(--sub); }
+  .h-witem .k { font-weight: 600; }
+  .h-witem .x { margin-left: auto; padding: 2px 8px; border: none; background: none; color: var(--sub); font-size: 16px; cursor: pointer; }
+  .h-chart { margin: 8px 0 4px; }
+  .h-guide { margin: 6px 0 0; padding-left: 1.1em; line-height: 1.7; }
+  .h-guide li { margin: 2px 0; }
+  .h-muted { color: var(--sub); font-size: 13px; }
+</style>
+<script>
+  // ---- 健康（ダイエット）タブ ----
+  const H = { settings: {}, targets: {}, weights: [], activityOptions: [], presetTasks: [], healthTaskCount: 0, guide: [], sheetUrl: '' };
+  const H_CACHE = 'healthData_v1';
+
+  function hToday() {
+    const d = new Date();
+    const p = n => (n < 10 ? '0' : '') + n;
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+
+  function loadHealth() {
+    try {
+      const c = JSON.parse(localStorage.getItem(H_CACHE) || 'null');
+      if (c) { Object.assign(H, c); renderHealth(); }
+    } catch (e) { /* キャッシュが読めなくても支障なし */ }
+    call('getHealthData')
+      .then(d => {
+        Object.assign(H, d);
+        try { localStorage.setItem(H_CACHE, JSON.stringify(d)); } catch (e) { /* 保存できなくても支障なし */ }
+        renderHealth();
+      })
+      .catch(e => {
+        if (!H.guide || !H.guide.length) {
+          $('healthBody').innerHTML = '';
+          $('healthBody').appendChild(note('エラー：' + errMsg(e), true));
+        } else {
+          showError(e);
+        }
+      });
+  }
+
+  // ---- 7日平均・グラフ ----
+  function movingAvg(vals, win) {
+    return vals.map((_, i) => {
+      const seg = vals.slice(Math.max(0, i - win + 1), i + 1);
+      return seg.reduce((a, b) => a + b, 0) / seg.length;
+    });
+  }
+
+  function weightChart(weights) {
+    const pts = weights.filter(w => w.kg);
+    if (pts.length < 2) return '<div class="h-muted">体重を2回以上記録すると、ここに折れ線グラフが出ます。</div>';
+    const kg = pts.map(w => w.kg);
+    const avg = movingAvg(kg, 7);
+    const W = 320, Hh = 140, padL = 22, padR = 10, padT = 10, padB = 16;
+    const lo = Math.floor(Math.min.apply(null, kg) - 0.5);
+    const hi = Math.ceil(Math.max.apply(null, kg) + 0.5);
+    const span = (hi - lo) || 1;
+    const x = i => padL + (W - padL - padR) * (pts.length === 1 ? 0 : i / (pts.length - 1));
+    const y = v => padT + (Hh - padT - padB) * (1 - (v - lo) / span);
+    const line = avg.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)).join(' ');
+    const dots = pts.map((w, i) => '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(w.kg).toFixed(1) + '" r="2" fill="#cbd5e1"/>').join('');
+    let goal = '';
+    const g = Number(H.settings['目標体重kg']);
+    if (g > 0 && g >= lo && g <= hi) {
+      const gy = y(g).toFixed(1);
+      goal = '<line x1="' + padL + '" y1="' + gy + '" x2="' + (W - padR) + '" y2="' + gy + '" stroke="#06c755" stroke-dasharray="4 3" stroke-width="1"/>' +
+        '<text x="' + (W - padR) + '" y="' + (Number(gy) - 2) + '" text-anchor="end" font-size="9" fill="#06c755">目標 ' + g + '</text>';
+    }
+    return '<svg viewBox="0 0 ' + W + ' ' + Hh + '" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">' +
+      '<text x="2" y="' + (y(hi) + 3).toFixed(1) + '" font-size="9" fill="#98a2b3">' + hi + '</text>' +
+      '<text x="2" y="' + (y(lo) + 3).toFixed(1) + '" font-size="9" fill="#98a2b3">' + lo + '</text>' +
+      goal + dots +
+      '<path d="' + line + '" fill="none" stroke="#1a73e8" stroke-width="2"/></svg>';
+  }
+
+  // ---- 表示 ----
+  function renderHealth() {
+    const body = $('healthBody');
+    if (!body) return;
+    const t = H.targets || {};
+    const s = H.settings || {};
+    const weights = H.weights || [];
+    const last = weights.length ? weights[weights.length - 1] : null;
+    const recent = weights.slice(-7).map(w => w.kg);
+    const avg7 = recent.length ? (recent.reduce((a, b) => a + b, 0) / recent.length) : null;
+    const goal = Number(s['目標体重kg']);
+
+    const targetHtml = t.ready
+      ? '<div class="h-target">' +
+          '<div><div class="big" style="color:#b42318">' + t.targetKcal + '</div><div class="lbl">1日の目標カロリー (kcal)</div></div>' +
+          '<div><div class="big" style="color:#b42318">' + t.proteinLow + '〜' + t.proteinHigh + '</div><div class="lbl">たんぱく質 (g/日)</div></div>' +
+          '<div><div class="big">' + t.bmi + '</div><div class="lbl">BMI</div></div>' +
+          (t.months ? '<div><div class="big">約' + t.months + '</div><div class="lbl">目標までの目安 (か月)</div></div>' : '') +
+        '</div>' +
+        '<div class="h-sub" style="margin-top:8px">消費の目安 ' + t.tdee + ' kcal／基礎代謝 ' + t.bmr + ' kcal・適正体重の目安 ' + t.idealWeight + ' kg' +
+          (t.hitFloor ? '（安全下限に合わせています）' : '') + '</div>'
+      : '<div class="h-muted">下の「目標の設定」に、性別・年齢・身長・体重を入れると、目標カロリーとたんぱく質が自動で出ます。</div>';
+
+    const guideHtml = (H.guide || []).map(g => '<li>' + g + '</li>').join('');
+    const actOpts = (H.activityOptions || []).map(o =>
+      '<option value="' + o + '"' + (o === s['活動レベル'] ? ' selected' : '') + '>' + o + '</option>').join('');
+
+    body.innerHTML =
+      // 目標
+      '<div class="card"><div class="sec" style="margin-top:0">今日のダイエット</div>' + targetHtml + '</div>' +
+
+      // 体重
+      '<div class="card"><div class="sec" style="margin-top:0">体重の記録</div>' +
+        '<div class="h-sub" style="margin-bottom:8px">' +
+          (last ? '最新 <b>' + last.kg + 'kg</b>（' + last.date + '）' : '') +
+          (avg7 != null ? '　／　7日平均（直近' + recent.length + '回）<b>' + (Math.round(avg7 * 10) / 10) + 'kg</b>' : '') +
+          (goal > 0 && last ? '　／　目標まで <b>' + (Math.round((last.kg - goal) * 10) / 10) + 'kg</b>' : '') +
+        '</div>' +
+        '<div class="h-chart">' + weightChart(weights) + '</div>' +
+        '<div class="h-wrow">' +
+          '<label class="h-field" style="flex:1.2">日付<input id="hwDate" type="date"></label>' +
+          '<label class="h-field">体重kg<input id="hwKg" type="number" step="0.1" inputmode="decimal" placeholder="60.2"></label>' +
+          '<label class="h-field">体脂肪率%（任意）<input id="hwFat" type="number" step="0.1" inputmode="decimal" placeholder="—"></label>' +
+          '<button id="hwSave" class="primary" type="button">記録</button>' +
+        '</div>' +
+        '<div id="hwList" class="h-wlist"></div>' +
+      '</div>' +
+
+      // 見る数字ガイド
+      '<div class="card"><div class="sec" style="margin-top:0">エルフィの数字、どれを見る？</div>' +
+        '<ul class="h-guide">' + guideHtml + '</ul></div>' +
+
+      // 目標の設定
+      '<details class="card"><summary style="cursor:pointer;font-weight:600">目標の設定（ここを入れると自動計算）</summary>' +
+        '<div class="h-grid" style="margin-top:12px">' +
+          '<label class="h-field">性別<select id="hSex"><option value="女性"' + (s['性別'] === '女性' ? ' selected' : '') + '>女性</option><option value="男性"' + (s['性別'] === '男性' ? ' selected' : '') + '>男性</option></select></label>' +
+          '<label class="h-field">年齢<input id="hAge" type="number" inputmode="numeric"></label>' +
+          '<label class="h-field">身長 (cm)<input id="hHeight" type="number" inputmode="decimal"></label>' +
+          '<label class="h-field">現在の体重 (kg)<input id="hWeight" type="number" step="0.1" inputmode="decimal"></label>' +
+          '<label class="h-field">目標の体重 (kg)<input id="hGoal" type="number" step="0.1" inputmode="decimal"></label>' +
+          '<label class="h-field">活動レベル<select id="hAct">' + actOpts + '</select></label>' +
+        '</div>' +
+        '<div class="btns"><button id="hSaveSettings" class="primary" type="button">保存して計算</button></div>' +
+        '<div class="h-sub" style="margin-top:8px">計算は推定式（Mifflin-St Jeor）。まず2週間続けて、実際の増減で±100kcal微調整を。</div>' +
+      '</details>' +
+
+      // TODO登録
+      '<div class="card"><div class="sec" style="margin-top:0">ダイエットのTODOをタスクに登録</div>' +
+        '<div class="h-sub">毎日/週1/月1のダイエット習慣を「健康」プロジェクトの繰り返しタスクにします（' +
+          (H.presetTasks ? H.presetTasks.length : 0) + '件）。押すとタスクタブに並びます。' +
+          (H.healthTaskCount ? '　現在' + H.healthTaskCount + '件登録済み。' : '') + '</div>' +
+        '<div class="btns"><button id="hRegister" type="button">ダイエットの繰り返しタスクを登録</button></div>' +
+      '</div>' +
+
+      // 資料
+      '<p class="range" style="margin-top:4px">食事の組み方・コレステロール対策・運動・基礎知識は「ダイエット記録」シートにまとめてあります。' +
+        (H.sheetUrl ? ' <a href="' + H.sheetUrl + '" target="_blank">データのスプレッドシートを開く</a>' : '') + '</p>';
+
+    // 値のセット
+    $('hwDate').value = hToday();
+    $('hAge').value = s['年齢'] != null ? s['年齢'] : '';
+    $('hHeight').value = s['身長cm'] != null ? s['身長cm'] : '';
+    $('hWeight').value = s['現在体重kg'] != null ? s['現在体重kg'] : '';
+    $('hGoal').value = s['目標体重kg'] != null ? s['目標体重kg'] : '';
+
+    renderWeightList();
+
+    // 配線
+    $('hwSave').onclick = onSaveWeight;
+    $('hSaveSettings').onclick = onSaveSettings;
+    $('hRegister').onclick = onRegister;
+  }
+
+  function renderWeightList() {
+    const box = $('hwList');
+    if (!box) return;
+    box.innerHTML = '';
+    const recent = (H.weights || []).slice(-10).reverse();
+    if (!recent.length) { box.appendChild(note('まだ記録がありません。今朝の体重を入れてみましょう。')); return; }
+    recent.forEach(w => {
+      const el = document.createElement('div');
+      el.className = 'h-witem';
+      el.innerHTML = '<span class="d"></span><span class="k"></span><span class="f h-muted"></span><button class="x" title="削除">×</button>';
+      el.querySelector('.d').textContent = w.date;
+      el.querySelector('.k').textContent = w.kg + 'kg';
+      el.querySelector('.f').textContent = (w.fat === '' || w.fat == null) ? '' : ('体脂肪 ' + w.fat + '%');
+      el.querySelector('.x').onclick = () => onDeleteWeight(w.date);
+      box.appendChild(el);
+    });
+  }
+
+  // ---- 操作 ----
+  function onSaveWeight() {
+    const date = $('hwDate').value;
+    const kg = $('hwKg').value;
+    const fat = $('hwFat').value;
+    if (!date) { alert('日付を選んでください'); return; }
+    if (!(Number(kg) > 0)) { alert('体重（kg）を数字で入れてください'); $('hwKg').focus(); return; }
+    $('hwSave').disabled = true;
+    sync(call('saveWeight', date, kg, fat === '' ? '' : fat, ''))
+      .then(list => {
+        H.weights = list;
+        try { localStorage.setItem(H_CACHE, JSON.stringify(H)); } catch (e) { /* noop */ }
+        $('hwKg').value = ''; $('hwFat').value = '';
+        renderHealth();
+      })
+      .catch(showError)
+      .finally(() => { const b = $('hwSave'); if (b) b.disabled = false; });
+  }
+
+  function onDeleteWeight(date) {
+    if (!confirm(date + ' の記録を消しますか？')) return;
+    sync(call('deleteWeight', date))
+      .then(list => { H.weights = list; try { localStorage.setItem(H_CACHE, JSON.stringify(H)); } catch (e) {} renderHealth(); })
+      .catch(showError);
+  }
+
+  function onSaveSettings() {
+    const input = {
+      '性別': $('hSex').value,
+      '年齢': $('hAge').value,
+      '身長cm': $('hHeight').value,
+      '現在体重kg': $('hWeight').value,
+      '目標体重kg': $('hGoal').value,
+      '活動レベル': $('hAct').value
+    };
+    $('hSaveSettings').disabled = true;
+    sync(call('saveHealthSettings', input))
+      .then(res => {
+        H.settings = res.settings; H.targets = res.targets;
+        try { localStorage.setItem(H_CACHE, JSON.stringify(H)); } catch (e) {}
+        renderHealth();
+      })
+      .catch(showError)
+      .finally(() => { const b = $('hSaveSettings'); if (b) b.disabled = false; });
+  }
+
+  function onRegister() {
+    $('hRegister').disabled = true;
+    sync(call('registerDietTasks'))
+      .then(res => {
+        const msg = res.added.length
+          ? res.added.length + '件を「健康」プロジェクトに登録しました。' + (res.skipped.length ? '（' + res.skipped.length + '件は登録済みのため飛ばしました）' : '')
+          : 'すべて登録済みでした（' + res.skipped.length + '件）。';
+        alert(msg + '\nタスクタブで確認できます。');
+        H.healthTaskCount = res.added.length + res.skipped.length;
+        renderHealth();
+        if (typeof loadAll === 'function') loadAll(); // タスクタブも最新に
+      })
+      .catch(showError)
+      .finally(() => { const b = $('hRegister'); if (b) b.disabled = false; });
+  }
+
+  // 起動時に一度読み込む（キャッシュがあれば即表示 → 裏で最新化）
+  loadHealth();
+</script>
+
+<script>
+  // ---- 起動：前回の内容をすぐ表示 → 裏で最新を1回で取り寄せて差し替える ----
+  const bootAt = performance.now(); // 画面の枠が開いてから、ここに来るまでの時間
+
+  /** 今の内容を端末に覚えておく（次に開いたとき、すぐ表示するため） */
+  function saveState() {
+    writeCache({
+      tasks: {
+        today: T.today, projects: T.projects, events: T.events, repeatRules: T.repeatRules,
+        tasks: T.tasks.filter(t => !t.pending)
+      },
+      reminders: lastRemindData
+    });
+  }
+
+  function applyAll(data) {
+    applyTaskData(data.tasks);
+    if (data.reminders) renderReminders(data.reminders);
+  }
+
+  const sec = ms => (ms / 1000).toFixed(1);
+
+  /** 画面下の計測表示。どこに時間がかかったかを見るため */
+  function paintPerf(data, fetchMs) {
+    const tm = (data && data.timing) || {};
+    const inside = tm.total ? '（サーバーの中 ' + sec(tm.total) + '秒：表 ' + sec(tm.sheet) + '・予定 ' + sec(tm.calendar) +
+      '・リマインド ' + sec(tm.reminders) + '・タスク ' + sec(tm.tasks) + '）' : '';
+    $('perf').textContent = '／画面の準備 ' + sec(bootAt) + '秒' +
+      (fetchMs === null ? (data && data.stale ? '・控えを表示（裏で最新に更新）' : '・データは画面と同時に到着') : '・データの取り寄せ ' + sec(fetchMs) + '秒') +
+      inside + '・記憶：' + (STORAGE_OK ? '使える' : '使えない');
+  }
+
+  function loadAll() {
+    const t0 = performance.now();
+    refreshing = true;
+    paintStatus();
+    call('getAppData')
+      .then(data => {
+        applyAll(data);
+        writeCache(data);
+        paintPerf(data, performance.now() - t0);
+      })
+      .catch(e => {
+        if (!T.today) { // 前回の内容もないときは、画面にエラーを出す
+          $('taskList').innerHTML = '';
+          $('taskList').appendChild(note('エラー：' + errMsg(e), true));
+        } else {
+          showError(e);
+        }
+      })
+      .finally(() => { refreshing = false; paintStatus(); });
+  }
+
+  $('reload').onclick = loadAll;
+
+  $('tokenForm').onsubmit = e => {
+    e.preventDefault();
+    const t = $('tokenInput').value.trim();
+    if (!t) return;
+    setToken(t);
+    $('tokenScreen').hidden = true;
+    loadAll();
+  };
+  let firstTab = 'tasks';
+  try { firstTab = localStorage.getItem('tab') || 'tasks'; } catch (e) { /* 読めなければタスクから */ }
+  showTab(TABS.indexOf(firstTab) === -1 ? 'tasks' : firstTab);
+
+  if (INITIAL_DATA && INITIAL_DATA.tasks) {
+    // データが画面と一緒に届いているので、取りに行かずにそのまま表示する
+    applyAll(INITIAL_DATA);
+    writeCache(INITIAL_DATA);
+    paintPerf(INITIAL_DATA, null);
+    // 届いたのが「控え」なら、または日付が変わっているなら、裏で最新に差し替える
+    if (INITIAL_DATA.stale || INITIAL_DATA.tasks.today !== todayLocal()) loadAll();
+  } else {
+    const cached = readCache();
+    if (cached && cached.tasks) applyAll(cached);
+    else $('taskList').appendChild(note('読み込み中…'));
+    loadAll();
+  }
+</script>
+<script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});</script>
 </body>
 </html>
