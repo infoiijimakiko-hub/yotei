@@ -71,6 +71,7 @@
   .when { color: var(--sub); font-size: 13px; }
   .badge { padding: 2px 8px; border-radius: 99px; font-size: 12px; white-space: nowrap; background: var(--red-bg); color: var(--red); }
   .badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .badge.later { background: #f2f4f7; color: var(--sub); }
   .card textarea { width: 100%; min-height: 120px; padding: 10px; line-height: 1.6;
     border: 1px solid var(--line); border-radius: 8px; resize: vertical; }
   .hint { margin-top: 6px; color: var(--red); font-size: 13px; }
@@ -87,12 +88,21 @@
   .pick-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .pick-head button { padding: 6px 12px; font-size: 13px; }
   .pick { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-  .pick button { display: flex; align-items: center; width: 100%; padding: 14px 16px; border: none; border-top: 1px solid var(--line); border-radius: 0; text-align: left; font-size: 16px; }
-  .pick button:first-child { border-top: none; }
-  .pick button.on { background: var(--blue-bg); color: var(--blue); font-weight: 700; }
+  .pick > button { display: flex; align-items: center; width: 100%; padding: 14px 16px; border: none; border-top: 1px solid var(--line); border-radius: 0; text-align: left; font-size: 16px; }
+  .pick > button:first-child { border-top: none; }
+  .pick > button.on { background: var(--blue-bg); color: var(--blue); font-weight: 700; }
   .pick .dot { width: 10px; height: 10px; margin-right: 10px; }
   .pick .fname { flex: 1; }
   .pick .fcount { color: var(--sub); font-size: 14px; }
+  .pick.busy { opacity: .5; pointer-events: none; } /* 整理の保存中は押せないように */
+  .pick-foot { margin: 12px 0 0; text-align: center; }
+  .pick-foot button { border: none; background: none; color: var(--blue); font-size: 14px; }
+  .manage-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 16px; border-top: 1px solid var(--line); }
+  .manage-row:first-child { border-top: none; }
+  .manage-name { flex: 1; min-width: 0; display: flex; align-items: center; font-size: 15px; }
+  .manage-name .fname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .manage-name .fcount { margin: 0 4px 0 8px; color: var(--sub); font-size: 13px; }
+  .manage-row button { flex: none; padding: 6px 10px; font-size: 13px; }
 
   /* タスク：一覧 */
   .sec { margin: 18px 0 6px; font-size: 13px; font-weight: 700; color: var(--sub); }
@@ -199,17 +209,18 @@
   </section>
 
   <!-- 画面を直したら数字を上げる。公開中の画面が最新かどうかの目印 -->
-  <p class="range" style="margin-top:24px">画面の版：v20（2026-09-27）<span id="perf"></span></p>
+  <p class="range" style="margin-top:24px">画面の版：v21（2026-09-27）<span id="perf"></span></p>
 </main>
 
 <!-- 表示するプロジェクトを選ぶ画面 -->
 <div id="filterPick" class="modal" hidden>
   <div class="sheet">
     <div class="pick-head">
-      <h2 style="margin:0;font-size:16px">表示するプロジェクト</h2>
+      <h2 id="pickTitle" style="margin:0;font-size:16px">表示するプロジェクト</h2>
       <button id="filterClose" type="button">閉じる</button>
     </div>
     <div id="filterList" class="pick"></div>
+    <p class="pick-foot"><button id="pickMode" type="button"></button></p>
   </div>
 </div>
 
@@ -435,9 +446,14 @@
     a.remove();
   }
 
-  /** タブに「明日の授業で未送信」の件数を出す（送り忘れ防止） */
+  /** 送る日が来ているか（生徒ごとの「何日前に送る」。古いデータには無いので、そのときは明日の授業だけ） */
+  function isSendDay(i) {
+    return i.sendNow != null ? i.sendNow : i.dayIndex === 1;
+  }
+
+  /** タブに「送る日が来ていて未送信」の件数を出す（送り忘れ防止） */
   function updateRemindCount() {
-    const n = reminders.filter(i => i.dayIndex === 1 && !i.sentAt).length;
+    const n = reminders.filter(i => isSendDay(i) && !i.sentAt).length;
     $('remindCount').textContent = n;
     $('remindCount').hidden = n === 0;
   }
@@ -500,8 +516,10 @@
 
     function paint() {
       el.classList.toggle('sent', !!item.sentAt);
-      badge.className = 'badge' + (item.sentAt ? ' ok' : '');
-      badge.textContent = item.sentAt ? '送信済み ' + item.sentAt : '未送信';
+      // 送る日がまだ先なら「10/1（木）に送る」と控えめに出す
+      const later = !item.sentAt && !isSendDay(item);
+      badge.className = 'badge' + (item.sentAt ? ' ok' : later ? ' later' : '');
+      badge.textContent = item.sentAt ? '送信済み ' + item.sentAt : later ? item.sendLabel + 'に送る' : '未送信';
       sentBtn.textContent = item.sentAt ? '未送信に戻す' : '送信済みにする';
       updateRemindCount();
     }
@@ -1068,7 +1086,12 @@
 
   // ---- 表示するプロジェクトを選ぶ画面 ----
 
+  let manageMode = false; // true＝「プロジェクトの整理」（名前を変える・消す）
+
   function fillFilterPick() {
+    $('pickTitle').textContent = manageMode ? 'プロジェクトの整理' : '表示するプロジェクト';
+    $('pickMode').textContent = manageMode ? '← 表示の切り替えに戻る' : 'プロジェクトを整理する（名前を変える・消す）';
+    if (manageMode) { fillManage(); return; }
     const box = $('filterList');
     box.innerHTML = '';
     filterChoices().forEach(c => {
@@ -1086,7 +1109,65 @@
     });
   }
 
+  /** 整理：タスクが0件のものも含めて全部のプロジェクトを並べ、名前の変更・削除のボタンを付ける */
+  function fillManage() {
+    const box = $('filterList');
+    box.innerHTML = '';
+    const counts = {};
+    T.tasks.filter(t => !t.done).forEach(t => { counts[t.project] = (counts[t.project] || 0) + 1; });
+    const names = T.projects.map(p => p.name);
+    Object.keys(counts).forEach(n => { if (names.indexOf(n) === -1) names.push(n); });
+    names.forEach(n => {
+      const row = document.createElement('div');
+      row.className = 'manage-row';
+      const label = document.createElement('div');
+      label.className = 'manage-name';
+      choiceContent(label, { label: n, count: counts[n] || 0, color: projectColor(n) });
+      row.appendChild(label);
+      if (n !== 'Inbox') { // Inbox は行き先がないタスクの置き場なので残す
+        const ren = document.createElement('button');
+        ren.type = 'button';
+        ren.textContent = '名前';
+        ren.onclick = () => renameProjectUi(n);
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'danger';
+        del.textContent = '削除';
+        del.onclick = () => deleteProjectUi(n, counts[n] || 0);
+        row.appendChild(ren);
+        row.appendChild(del);
+      }
+      box.appendChild(row);
+    });
+  }
+
+  /** 名前を変える／ほかのプロジェクトと同じ名前にすれば1つにまとめる */
+  function renameProjectUi(name) {
+    const to = (prompt('「' + name + '」の新しい名前\n（ほかのプロジェクトと同じ名前にすると、そちらにまとめます）', name) || '').trim();
+    if (!to || to === name) return;
+    if (T.projects.some(p => p.name === to) &&
+      !confirm('「' + name + '」を「' + to + '」にまとめます。\n「' + name + '」のタスクはすべて「' + to + '」に移ります。よろしいですか？')) return;
+    projectOp(call('renameProject', name, to), () => { if (T.filter === name) T.filter = to; });
+  }
+
+  function deleteProjectUi(name, count) {
+    const msg = '「' + name + '」を削除しますか？' + (count ? '\n中のタスク' + count + '件は Inbox に移ります。' : '');
+    if (!confirm(msg)) return;
+    projectOp(call('deleteProject', name), () => { if (T.filter === name) T.filter = 'all'; });
+  }
+
+  /** サーバーで書き換えたあと、届いた最新のデータで画面を描き直す */
+  function projectOp(p, after) {
+    $('filterList').classList.add('busy');
+    sync(p.then(d => { after(); applyTaskData(d); saveState(); }))
+      .catch(showError)
+      .finally(() => { $('filterList').classList.remove('busy'); if (!$('filterPick').hidden) fillFilterPick(); });
+  }
+
+  $('pickMode').onclick = () => { manageMode = !manageMode; fillFilterPick(); };
+
   $('filterBtn').onclick = () => {
+    manageMode = false;
     fillFilterPick();
     $('filterPick').hidden = false;
   };
