@@ -34,6 +34,21 @@
   .tabs button { border: none; background: none; padding: 10px 12px; border-radius: 8px; color: var(--sub); font-weight: 600; }
   .tabs button.on { background: var(--blue-bg); color: var(--blue); }
   .status { color: var(--sub); font-size: 12px; white-space: nowrap; }
+  button.icon { padding: 6px 12px; font-size: 18px; line-height: 1; }
+  .tabs button { padding: 10px 10px; }
+
+  /* 予定タブ */
+  .calbar { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+  .calbar input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .calday.today { color: var(--blue); }
+  .calday.picked { color: var(--text); }
+  .calday.picked::after { content: "　← 選んだ日"; color: var(--blue); font-weight: 400; }
+  .task.empty { color: var(--sub); font-size: 13px; }
+
+  /* 編集画面：期限の日の予定 */
+  .dayinfo { margin-top: 8px; font-size: 13px; line-height: 1.7; color: var(--text); }
+  .dayinfo:empty { display: none; }
+  .dayinfo-head { color: var(--sub); }
   .count[hidden] { display: none; } /* 下の display 指定が hidden を打ち消さないように */
   .count { display: inline-block; min-width: 20px; margin-left: 6px; padding: 0 6px; border-radius: 99px;
     background: var(--red); color: #fff; font-size: 12px; line-height: 20px; text-align: center; }
@@ -119,11 +134,13 @@
 <header>
   <nav class="tabs">
     <button type="button" data-tab="tasks">タスク</button>
+    <button type="button" data-tab="cal">予定</button>
     <button type="button" data-tab="remind">リマインド<span id="remindCount" class="count" hidden></span></button>
     <button type="button" data-tab="health">健康</button>
   </nav>
   <span id="status" class="status"></span>
-  <button id="reload" type="button" title="カレンダーとタスクを読み直す">読み直す</button>
+  <!-- タブが4つになったので、読み直すは記号だけにして場所を空ける -->
+  <button id="reload" class="icon" type="button" title="カレンダーとタスクを読み直す" aria-label="読み直す">↻</button>
 </header>
 
 <main>
@@ -140,6 +157,17 @@
       <summary id="doneSummary"></summary>
       <div id="doneList"></div>
     </details>
+  </section>
+
+  <!-- 予定（1週間の一覧。日付を選ぶと、その日から7日分） -->
+  <section id="tab-cal" hidden>
+    <div class="calbar">
+      <button id="calPrev" type="button" aria-label="前の週">◀</button>
+      <input id="calDate" type="date" aria-label="日付を選ぶ">
+      <button id="calToday" type="button">今日</button>
+      <button id="calNext" type="button" aria-label="次の週">▶</button>
+    </div>
+    <div id="calList"></div>
   </section>
 
   <!-- リマインド -->
@@ -160,7 +188,7 @@
   </section>
 
   <!-- 画面を直したら数字を上げる。公開中の画面が最新かどうかの目印 -->
-  <p class="range" style="margin-top:24px">画面の版：v15（2026-09-27）<span id="perf"></span></p>
+  <p class="range" style="margin-top:24px">画面の版：v16（2026-09-27）<span id="perf"></span></p>
 </main>
 
 <!-- タスクの編集画面 -->
@@ -176,6 +204,7 @@
       <button type="button" data-d="7">1週間後</button>
       <button type="button" data-d="">期限なし</button>
     </div>
+    <div id="edDayInfo" class="dayinfo"></div>
     <div class="row">
       <label class="field">繰り返し<select id="edRepeat"></select></label>
       <label class="field">所要時間<select id="edMinutes"></select></label>
@@ -340,7 +369,7 @@
   window.addEventListener('resize', fitAll);
 
   // ---- タブ ----
-  const TABS = ['tasks', 'remind', 'health'];
+  const TABS = ['tasks', 'cal', 'remind', 'health'];
 
   function showTab(name) {
     TABS.forEach(t => {
@@ -609,6 +638,8 @@
     const unsaved = T.tasks.filter(t => t.pending); // 追加したばかりで保存中のものは消さずに残す
     Object.assign(T, d, { filter: filter });
     T.tasks = T.tasks.concat(unsaved.filter(u => !findTask(u.id)));
+    // 予定タブ用に、サーバーが送ってくれた日数分の予定を覚える（js_cal.html）。古い保存分は2日分しかない
+    rememberEvents(T.events || [], T.today, d.eventDays || 2);
     renderTasks();
   }
 
@@ -654,6 +685,8 @@
     $('doneList').innerHTML = '';
     if (done.length) $('doneList').appendChild(taskList(done));
     $('doneBox').hidden = !done.length;
+
+    renderCal(); // 予定タブにも、期限のタスクの変化を反映する（js_cal.html）
   }
 
   function taskList(items) {
@@ -885,6 +918,7 @@
     $('edStar').checked = t ? !!t.star : T.filter === 'star';
     $('edMemo').value = t ? t.memo : '';
     $('edDelete').hidden = !t;
+    showDayInfo(); // 期限の日の予定を下に出す（js_cal.html）
     $('editor').hidden = false;
     if (!t) $('edTitle').focus();
   }
@@ -905,7 +939,10 @@
   };
 
   document.querySelectorAll('#editor [data-d]').forEach(b => {
-    b.onclick = () => { $('edDue').value = b.dataset.d === '' ? '' : addDaysYmd(T.today, Number(b.dataset.d)); };
+    b.onclick = () => {
+      $('edDue').value = b.dataset.d === '' ? '' : addDaysYmd(T.today, Number(b.dataset.d));
+      showDayInfo();
+    };
   });
 
   $('edForm').onsubmit = e => {
@@ -961,6 +998,119 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { el.hidden = true; }, 6000);
   }
+</script>
+
+<script>
+  // ---- 予定（1週間の一覧・その日の空きの確認）----
+  // 予定は日付ごとに覚えておき（EV）、まだ取り寄せていない週だけサーバーに頼む
+  const EV = {};          // '2026-10-01' → [{ time, title }]
+  const EV_LOADED = {};   // 取り寄せ済みの日
+  const CAL = { start: '' };
+  const CAL_DAYS = 7;
+
+  /** アプリを開いたときに届いた予定（今日から8日分）を覚える */
+  function rememberEvents(events, fromYmd, days) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fromYmd || '')) return; // 日付がまだ分からない（データが届く前）ときは何もしない
+    for (let i = 0; i < days; i++) {
+      const d = addDaysYmd(fromYmd, i);
+      EV[d] = [];
+      EV_LOADED[d] = true;
+    }
+    events.forEach(e => { if (EV_LOADED[e.date]) EV[e.date].push(e); });
+  }
+
+  /** from から days 日分の予定を用意する（覚えていない日があればサーバーに頼む） */
+  function ensureEvents(fromYmd, days) {
+    for (let i = 0; i < days; i++) {
+      if (!EV_LOADED[addDaysYmd(fromYmd, i)]) {
+        return call('getEvents', fromYmd, days).then(list => rememberEvents(list, fromYmd, days));
+      }
+    }
+    return Promise.resolve();
+  }
+
+  function renderCal() {
+    if (!T.today) return;
+    if (!CAL.start) CAL.start = T.today;
+    $('calDate').value = CAL.start;
+    const box = $('calList');
+    const days = [];
+    for (let i = 0; i < CAL_DAYS; i++) days.push(addDaysYmd(CAL.start, i));
+    const missing = days.some(d => !EV_LOADED[d]);
+    box.innerHTML = '';
+    if (missing) box.appendChild(note('読み込み中…'));
+
+    days.forEach(day => {
+      const n = diffDays(day, T.today);
+      const h = document.createElement('div');
+      h.className = 'sec calday' + (n === 0 ? ' today' : '') + (day === $('calDate').dataset.pick ? ' picked' : '');
+      h.textContent = fmtDate(day) + (n === 0 ? '　今日' : n === 1 ? '　明日' : '');
+      box.appendChild(h);
+
+      const list = document.createElement('div');
+      list.className = 'tasks';
+      const evs = EV[day] || [];
+      evs.forEach(e => list.appendChild(eventEl(e)));
+      // その日が期限のタスクも一緒に（予定の空きを見るときの参考に）
+      T.tasks.filter(t => !t.done && t.due === day).sort(byPriority).forEach(t => list.appendChild(taskEl(t)));
+      if (!list.children.length) {
+        const empty = document.createElement('div');
+        empty.className = 'task empty';
+        empty.textContent = EV_LOADED[day] ? '予定なし' : '…';
+        list.appendChild(empty);
+      }
+      box.appendChild(list);
+    });
+
+    if (missing) {
+      ensureEvents(CAL.start, CAL_DAYS).then(renderCal).catch(e => {
+        box.insertBefore(note('予定を読み込めませんでした：' + errMsg(e), true), box.firstChild);
+      });
+    }
+  }
+
+  function moveCal(startYmd, picked) {
+    if (!T.today) return; // データが届く前は動かさない
+    CAL.start = startYmd;
+    $('calDate').dataset.pick = picked || '';
+    renderCal();
+  }
+
+  $('calPrev').onclick = () => moveCal(addDaysYmd(CAL.start || T.today, -CAL_DAYS));
+  $('calNext').onclick = () => moveCal(addDaysYmd(CAL.start || T.today, CAL_DAYS));
+  $('calToday').onclick = () => moveCal(T.today);
+  // 日付を選ぶと、その日から7日分を出す（その日が一番上）
+  $('calDate').onchange = () => { if ($('calDate').value) moveCal($('calDate').value, $('calDate').value); };
+
+  // ---- タスクの編集画面：期限の日の予定を、すぐ下に出す ----
+  let dayInfoSeq = 0;
+  function showDayInfo() {
+    const box = $('edDayInfo');
+    const day = $('edDue').value;
+    box.innerHTML = '';
+    if (!day) return;
+    const seq = ++dayInfoSeq;
+    const paint = () => {
+      if (seq !== dayInfoSeq) return; // 別の日を選び直していたら古い結果は出さない
+      box.innerHTML = '';
+      const evs = EV[day] || [];
+      const tasks = T.tasks.filter(t => !t.done && t.due === day && (!editing || t.id !== editing.id));
+      const head = document.createElement('div');
+      head.className = 'dayinfo-head';
+      head.textContent = fmtDate(day) + 'の予定' + (evs.length ? '' : '：なし') + (tasks.length ? '（この日が期限のタスク ' + tasks.length + '件）' : '');
+      box.appendChild(head);
+      evs.forEach(e => {
+        const r = document.createElement('div');
+        r.textContent = '📅 ' + e.time + '　' + e.title;
+        box.appendChild(r);
+      });
+    };
+    if (EV_LOADED[day]) { paint(); return; }
+    box.textContent = fmtDate(day) + 'の予定を確認中…';
+    ensureEvents(day, 1).then(paint).catch(() => { if (seq === dayInfoSeq) box.textContent = '予定を確認できませんでした'; });
+  }
+  $('edDue').addEventListener('change', showDayInfo);
+  $('edDue').addEventListener('input', showDayInfo);
 </script>
 
 <style>
@@ -1308,7 +1458,7 @@
   function saveState() {
     writeCache({
       tasks: {
-        today: T.today, projects: T.projects, events: T.events, repeatRules: T.repeatRules,
+        today: T.today, projects: T.projects, events: T.events, eventDays: T.eventDays, repeatRules: T.repeatRules,
         tasks: T.tasks.filter(t => !t.pending)
       },
       reminders: lastRemindData

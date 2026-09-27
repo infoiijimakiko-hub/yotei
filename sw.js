@@ -1,7 +1,7 @@
 // 画面を端末に保存しておき、ホーム画面のアイコンから一瞬で開けるようにする（build_web.js が sw.js に書き出す）。
 // 開くときは保存してある画面をすぐ出し、裏でGitHubから新しい版を取ってきて保存し直す（次に開いたときに反映）。
 // データのやり取り（Googleの窓口）には手を出さない。
-const CACHE = 'yotei-app-20260927095631';
+const CACHE = 'yotei-app-20260927103621';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'maskable-512.png', 'favicon-48.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
