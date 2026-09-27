@@ -186,7 +186,7 @@
   </section>
 
   <!-- 画面を直したら数字を上げる。公開中の画面が最新かどうかの目印 -->
-  <p class="range" style="margin-top:24px">画面の版：v18（2026-09-27）<span id="perf"></span></p>
+  <p class="range" style="margin-top:24px">画面の版：v19（2026-09-27）<span id="perf"></span></p>
 </main>
 
 <!-- タスクの編集画面 -->
@@ -661,14 +661,14 @@
     renderChips();
 
     const open = T.tasks.filter(t => !t.done && matchesFilter(t));
-    // 期限切れ → 今日から1週間は1日ずつ → それ以降 → 期限なし
-    const groups = [{ title: '期限切れ', cls: 'overdue', test: t => t.due && t.due < T.today }];
+    // 期限切れ（期限を決めていないものもここ＝早く期限を決めるべきもの）→ 今日から1週間は1日ずつ → それ以降
+    // 並びは byPriority で、期限の過ぎたもの（古い順）→ 期限なし の順になる
+    const groups = [{ title: '期限切れ', cls: 'overdue', test: t => !t.due || t.due < T.today }];
     for (let i = 0; i < WEEK_DAYS; i++) {
       const day = addDaysYmd(T.today, i);
       groups.push({ title: (i === 0 ? '今日 ' : i === 1 ? '明日 ' : '') + fmtDate(day), cls: i === 0 ? 'today' : '', day: true, test: t => t.due === day });
     }
     groups.push({ title: 'それ以降', test: t => t.due && diffDays(t.due, T.today) >= WEEK_DAYS });
-    groups.push({ title: '期限なし', test: t => !t.due });
 
     const box = $('taskList');
     box.innerHTML = '';
@@ -762,6 +762,7 @@
     dot.style.background = projectColor(t.project);
     add(t.project).prepend(dot);
     if (t.due) add(dueLabel(t.due), 'due' + (!t.done && t.due < T.today ? ' over' : ''));
+    else if (!t.done) add('期限なし', 'due over'); // 期限切れの欄にいる理由が分かるように
     if (t.time) add('🕘 ' + timeLabel(t), 'time');
     if (t.repeat) add('↻ ' + t.repeat);
     if (t.minutes && !t.time) add('⏱ ' + fmtMinutes(t.minutes)); // 時刻があれば「9:00〜10:30」に含まれる
