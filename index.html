@@ -160,7 +160,7 @@
   </section>
 
   <!-- 画面を直したら数字を上げる。公開中の画面が最新かどうかの目印 -->
-  <p class="range" style="margin-top:24px">画面の版：v14（2026-09-27）<span id="perf"></span></p>
+  <p class="range" style="margin-top:24px">画面の版：v15（2026-09-27）<span id="perf"></span></p>
 </main>
 
 <!-- タスクの編集画面 -->
@@ -1092,6 +1092,7 @@
           (goal > 0 && last ? '　／　目標まで <b>' + (Math.round((last.kg - goal) * 10) / 10) + 'kg</b>' : '') +
         '</div>' +
         '<div class="h-chart">' + weightChart(weights) + '</div>' +
+        intervalsStatusHtml() +
         '<div class="h-wrow">' +
           '<label class="h-field" style="flex:1.2">日付<input id="hwDate" type="date"></label>' +
           '<label class="h-field">体重kg<input id="hwKg" type="number" step="0.1" inputmode="decimal" placeholder="60.2"></label>' +
@@ -1102,8 +1103,20 @@
       '</div>' +
 
       // 見る数字ガイド
-      '<div class="card"><div class="sec" style="margin-top:0">エルフィの数字、どれを見る？</div>' +
+      '<div class="card"><div class="sec" style="margin-top:0">体重計（eufy）の数字、どれを見る？</div>' +
         '<ul class="h-guide">' + guideHtml + '</ul></div>' +
+
+      // 体重計の自動取り込みの設定
+      '<details class="card"' + (H.intervals && H.intervals.configured ? '' : ' open') + '>' +
+        '<summary style="cursor:pointer;font-weight:600">体重計の自動取り込み（Intervals.icu）の設定</summary>' +
+        '<div class="h-sub" style="margin-top:10px">体重計 → eufyLife → ヘルスコネクト → Health Sync → Intervals.icu → このアプリ、の順で届きます。' +
+          'Intervals.icu の「設定」一番下「Developer Settings」で発行した APIキー を貼って保存してください。キーはサーバーにだけ保存され、画面には表示されません。</div>' +
+        '<div class="h-wrow" style="margin-top:10px">' +
+          '<label class="h-field" style="flex:3">APIキー<input id="hIcuKey" type="password" autocomplete="off" placeholder="' +
+            (H.intervals && H.intervals.configured ? '設定済み（変えるときだけ入力）' : 'ここに貼り付け') + '"></label>' +
+          '<button id="hIcuSave" class="primary" type="button">保存して取り込む</button>' +
+        '</div>' +
+      '</details>' +
 
       // 目標の設定
       '<details class="card"><summary style="cursor:pointer;font-weight:600">目標の設定（ここを入れると自動計算）</summary>' +
@@ -1144,6 +1157,63 @@
     $('hwSave').onclick = onSaveWeight;
     $('hSaveSettings').onclick = onSaveSettings;
     $('hRegister').onclick = onRegister;
+    $('hIcuSave').onclick = onSaveIcuKey;
+    if ($('hIcuImport')) $('hIcuImport').onclick = onImportIcu;
+  }
+
+  // ---- 体重計の自動取り込み（Intervals.icu） ----
+  function intervalsStatusHtml() {
+    const iv = H.intervals || {};
+    if (!iv.configured) {
+      return '<div class="h-sub" style="margin:6px 0 10px">体重計の自動取り込み：<b>未設定</b>（下の「体重計の自動取り込みの設定」から）</div>';
+    }
+    const msg = iv.error
+      ? '<span style="color:var(--red)">取り込みに失敗：' + escHtml(iv.error) + '</span>'
+      : '自動取り込み：<b>ON</b>' + (iv.lastImport ? '（最終 ' + escHtml(iv.lastImport) + '）' : '');
+    return '<div class="h-sub" style="margin:6px 0 10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">' + msg +
+      '<button id="hIcuImport" type="button" style="padding:5px 10px;font-size:13px">今すぐ取り込む</button></div>';
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function importSummary(res) {
+    if (!res || !res.configured) return 'APIキーが未設定です。';
+    const parts = ['直近30日で体重 ' + res.fetched + '件を確認'];
+    if (res.added) parts.push(res.added + '件を追加');
+    if (res.updated) parts.push(res.updated + '件を更新');
+    if (!res.added && !res.updated) parts.push('新しい記録はありませんでした');
+    if (res.latest) parts.push('最新：' + res.latest.date + ' ' + res.latest.kg + 'kg');
+    return parts.join('／');
+  }
+
+  function reloadHealthAfter(res) {
+    alert(importSummary(res));
+    return call('getHealthData').then(d => {
+      Object.assign(H, d);
+      try { localStorage.setItem(H_CACHE, JSON.stringify(d)); } catch (e) { /* noop */ }
+      renderHealth();
+    });
+  }
+
+  function onImportIcu() {
+    const b = $('hIcuImport');
+    if (b) b.disabled = true;
+    sync(call('importFromIntervals'))
+      .then(reloadHealthAfter)
+      .catch(showError)
+      .finally(() => { const x = $('hIcuImport'); if (x) x.disabled = false; });
+  }
+
+  function onSaveIcuKey() {
+    const key = $('hIcuKey').value.trim();
+    if (!key) { alert('Intervals.icu の APIキーを貼り付けてください'); $('hIcuKey').focus(); return; }
+    $('hIcuSave').disabled = true;
+    sync(call('setIntervalsKey', key))
+      .then(res => { $('hIcuKey').value = ''; return reloadHealthAfter(res); })
+      .catch(showError)
+      .finally(() => { const x = $('hIcuSave'); if (x) x.disabled = false; });
   }
 
   function renderWeightList() {
