@@ -97,6 +97,11 @@
   .task .ttl { line-height: 1.4; word-break: break-word; }
   .task .meta { margin-top: 2px; display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--sub); font-size: 12px; }
   .task .meta .due.over { color: var(--red); font-weight: 600; }
+  .memolink { color: var(--blue); text-decoration: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .memolink:hover { text-decoration: underline; }
+  .edlinks { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; font-size: 13px; }
+  .edlinks:empty { display: none; }
+  .edlinks .memolink { display: block; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--blue-bg); }
   .dot { display: inline-block; width: 8px; height: 8px; margin-right: 4px; border-radius: 50%; vertical-align: middle; }
   .task .star { flex: none; padding: 0 4px; border: none; background: none; font-size: 18px; color: #d0d5dd; }
   .task .star.on { color: var(--star); }
@@ -181,7 +186,7 @@
   </section>
 
   <!-- 画面を直したら数字を上げる。公開中の画面が最新かどうかの目印 -->
-  <p class="range" style="margin-top:24px">画面の版：v17（2026-09-27）<span id="perf"></span></p>
+  <p class="range" style="margin-top:24px">画面の版：v18（2026-09-27）<span id="perf"></span></p>
 </main>
 
 <!-- タスクの編集画面 -->
@@ -207,6 +212,7 @@
     </div>
     <label class="check-line"><input id="edStar" type="checkbox"> ★ 優先（プライオリティ）</label>
     <label class="field">メモ<textarea id="edMemo" rows="4"></textarea></label>
+    <div id="edLinks" class="edlinks"></div>
     <div class="btns">
       <button id="edSave" class="primary" type="submit">保存</button>
       <button id="edCancel" type="button">キャンセル</button>
@@ -759,7 +765,11 @@
     if (t.time) add('🕘 ' + timeLabel(t), 'time');
     if (t.repeat) add('↻ ' + t.repeat);
     if (t.minutes && !t.time) add('⏱ ' + fmtMinutes(t.minutes)); // 時刻があれば「9:00〜10:30」に含まれる
-    if (t.memo) add('📝 メモあり');
+    // メモの中のURLはその場で押して開けるように。URL以外の文字もあれば「メモあり」も出す
+    const links = memoLinks(t.memo);
+    links.slice(0, 3).forEach(u => meta.appendChild(linkEl(u)));
+    if (links.length > 3) add('🔗 ほか' + (links.length - 3) + '件');
+    if (t.memo && t.memo.replace(URL_RE, '').trim()) add('📝 メモあり');
 
     const star = el.querySelector('.star');
     star.textContent = t.star ? '★' : '☆';
@@ -769,6 +779,47 @@
     el.querySelector('.body').onclick = () => openEditor(t);
     star.onclick = () => toggleStar(t);
     return el;
+  }
+
+  // ---- メモの中のリンク ----
+
+  const URL_RE = /https?:\/\/[^\s<>"'「」『』（）、。]+/g;
+
+  /** メモからURLを取り出す（文末の「.」「)」などは含めない・同じURLは1回だけ） */
+  function memoLinks(memo) {
+    const found = String(memo || '').match(URL_RE) || [];
+    const list = [];
+    found.forEach(u => {
+      u = u.replace(/[.,;:!?)\]]+$/, '');
+      if (list.indexOf(u) === -1) list.push(u);
+    });
+    return list;
+  }
+
+  /** 押すと別の画面で開くリンク。表示はサイト名（docs.google.com など）だけにして短く */
+  function linkEl(url) {
+    const a = document.createElement('a');
+    a.className = 'memolink';
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    let host = url;
+    try { host = new URL(url).hostname.replace(/^www\./, ''); } catch (e) { /* そのまま出す */ }
+    a.textContent = '🔗 ' + host;
+    a.title = url;
+    a.onclick = e => e.stopPropagation(); // 行を押したときの「編集を開く」を起こさない
+    return a;
+  }
+
+  /** 編集画面：メモ欄の下に、押して開けるリンクを並べる */
+  function showMemoLinks() {
+    const box = $('edLinks');
+    box.innerHTML = '';
+    memoLinks($('edMemo').value).forEach(u => {
+      const a = linkEl(u);
+      a.textContent = '🔗 ' + u; // 編集画面では中身を確かめられるよう全体を出す
+      box.appendChild(a);
+    });
   }
 
   // ---- 操作（先に画面を変え、裏で保存）----
@@ -912,6 +963,7 @@
     fillSelect($('edMinutes'), mins.sort((a, b) => a - b).map(m => [String(m), m ? fmtMinutes(m) : 'なし']), String(t ? t.minutes : 0));
     $('edStar').checked = t ? !!t.star : T.filter === 'star';
     $('edMemo').value = t ? t.memo : '';
+    showMemoLinks();
     $('edDelete').hidden = !t;
     showDayInfo(); // 期限の日の予定を下に出す（js_cal.html）
     $('editor').hidden = false;
@@ -964,6 +1016,7 @@
     closeEditor();
   };
 
+  $('edMemo').oninput = showMemoLinks;
   $('edCancel').onclick = closeEditor;
   $('editor').onclick = e => { if (e.target === $('editor')) closeEditor(); }; // 外側を押したら閉じる
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('editor').hidden) closeEditor(); });
